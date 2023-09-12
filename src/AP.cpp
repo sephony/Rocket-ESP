@@ -1,6 +1,7 @@
 #include "AP.h"
 
 //  -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
+
 char RunModeValue[NUMBER_LEN];
 const char RunModeValues[][STRING_LEN] = {"Standard", "Advanced", "Debug", "Real-time Wireless Serial"};
 const char RunModeNames[][STRING_LEN] = {"标准模式", "高级模式", "调试模式", "实时无线串口模式"};
@@ -224,11 +225,20 @@ void configSaved() {
     Serial.println(T_ParaValue);
     Serial.printf("Parachute height is changed to:");
     Serial.println(H_ParaValue);
-    T_DETACH = strtof(T_DetachValue, NULL);
-    T_PARACHUTE = strtof(T_ParaValue, NULL);
-    HEIGHT_PARACHUTE = atoi(H_ParaValue);
-}
 
+    T_detach = atof(T_DetachValue);
+    T_para = atof(T_ParaValue);
+    H_para = atof(H_ParaValue);
+    T_protectPara = atof(T_ProtectValue);
+    rgbBrightness = atoi(RGB_BrightnessValue);
+
+    if (((String)RunModeValue != lastRunMode) || ((String)LaunchReadyValue == "selected")) {
+        Serial.printf("Run mode is changed to:");
+        Serial.println(RunModeValue);
+        lastRunMode = (String)RunModeValue;
+        sign_needReset = true;
+    }
+}
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     Serial.println("Validating form.");
     bool valid = true;

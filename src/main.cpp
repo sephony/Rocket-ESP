@@ -1,13 +1,13 @@
+#include "main.h"
+
 #include <Arduino.h>
 #include <ESP32Servo.h>
-
-#include <string>
-#include <vector>
 
 #include "AP.h"
 #include "Filter.h"
 #include "PinConfig.h"
 #include "RocketClient.h"
+#include "UserFunction.h"
 #include "Varibles.h"
 
 // FS
@@ -19,67 +19,14 @@
 #include <MS5611.h>
 #include <Wire.h>
 
-// #include "MS5611.h"
-
 // basic
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-/***** Function Declaration *****/
-float getHeight(MS5611 ms5611);
-void READ_5611();                                                           // 读取MS5611
-void appendFile(FS& fs, const char* path, const char* message, File file);  // 追加文件
-String getContentType(String filename);                                     // 获取文件类型
-bool exists(String path);                                                   // 判断文件是否存在
-bool handleFileRead(String path);                                           // 处理文件读取
-
-/* FSBroswer Varibles */
-// const char* ssid = "wifi-233";
-// const char* password = "wifi-password";
-// const char* host = "rocket";
-
 /***** State Machine Definition *****/
-enum mission_stage_t {
-    STAND_BY,
-    PRE_LAUNCH,
-    LAUNCHED,
-    DETACHED,
-    PRELAND,
-    LANDED
-};
-mission_stage_t MISSION_STAGE;
-
-/***** Interrupt Function Definition *****/
-void EXTI_Interrupt(void) {
-    if (MISSION_STAGE == PRE_LAUNCH) {
-        time_launch = millis();  // 单位ms
-        digitalWrite(GPIO_RUN_SIGN, HIGH);
-        MISSION_STAGE = LAUNCHED;
-        Serial.printf("External Interrupt Called\r\n");
-        // appendFile(SPIFFS, "/a.txt", "Hall Interrupt Called!\r\n", file);
-    }
-}
-
-bool handleFileRead(String path) {
-    Serial.println("handleFileRead: " + path);
-    if (path.endsWith("/")) {
-        path += "index.htm";
-    }
-    String contentType = getContentType(path);
-    String pathWithGz = path + ".gz";
-    if (exists(pathWithGz) || exists(path)) {
-        if (exists(pathWithGz)) {
-            path += ".gz";
-        }
-        File file = SPIFFS.open(path, "r");
-        server.streamFile(file, contentType);
-        file.close();
-        return true;
-    }
-    return false;
-}
+mission_stage_t mission_stage;
 
 /***** Class Definition *****/
 MS5611 ms5611(0x77);  // ESP32 HW SPI
@@ -122,12 +69,12 @@ void setup() {
     float altitude_sum = 0;
 
     for (int i = 0; i < 100; i++) {
-        READ_5611();
+        READ_5611(ms5611);
         altitude_sum += height;
-        delay(50);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
+        delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
     }
     H0 = altitude_sum / 100.0;
-    Serial.printf("Initial height is:%.4f/r/n", H0);
+    Serial.printf("Initial height is: %.4f m/r/n", H0);
 
     // start communication with IMU
     // int status = IMU.begin();
@@ -158,16 +105,17 @@ void setup() {
     if (!SPIFFS.begin(true)) {
         Serial.println("SPIFFS mount failed!");
     }
+    // SPIFFS.format();
     Serial.println("SPIFFS mounted!");
     Serial.printf("SPIFFS total memory: %d (Byte)\n", SPIFFS.totalBytes());
     Serial.printf("SPIFFS used memory: %d (Byte)\n", SPIFFS.usedBytes());
 
     // TODO 列出文件系统中的目录与文件
     File root = SPIFFS.open("/");
-    File file = root.openNextFile();
-    while (file) {
-        Serial.println(file.path());
-        file = root.openNextFile();
+    File file_temp = root.openNextFile();
+    while (file_temp) {
+        Serial.println(file_temp.path());
+        file_temp = root.openNextFile();
     }
     group_mode.addItem(&RunMode_Param);
     group_mode.addItem(&ParaMode_Param);
@@ -214,15 +162,11 @@ void setup() {
     Serial.println("HTTP server started");
     Serial.println("initialize done!");
 
-    T_DETACH = strtof(T_DetachValue, NULL);
-    T_PARACHUTE = strtof(T_ParaValue, NULL);
-    HEIGHT_PARACHUTE = atoi(H_ParaValue);
-    Serial.print("T_DETACH is");
-    Serial.println(T_DETACH);
-    Serial.print("T_PARACHUTE is");
-    Serial.println(T_PARACHUTE);
-    Serial.print("HEIGHT_PARACHUTE is");
-    Serial.println(HEIGHT_PARACHUTE);
+    T_detach = atof(T_DetachValue);
+    T_para = atof(T_ParaValue);
+    H_para = atof(H_ParaValue);
+    T_protectPara = atof(T_ProtectValue);
+    rgbBrightness = atoi(RGB_BrightnessValue);
 
     auto start = millis();
     ms5611.read();
@@ -234,8 +178,6 @@ void setup() {
     Serial.print(" mBar, Duration: ");
     Serial.print(stop - start);
     Serial.println(" ms");
-    // writeFile(SPIFFS, "/a.txt", "Start Of Program!\r\n");
-    // TODO:LED STATE
 }
 
 /***** Loop Function Definition *****/
@@ -243,31 +185,44 @@ void loop() {
     iotWebConf.doLoop();
     // server.handleClient();
 
+    if (sign_needReset) {
+        Serial.println("Rebooting after 1 second.");
+        delay(1000);
+        ESP.restart();
+        sign_needReset = false;
+    }
+
     if (String(RunModeValue) == "Standard") {
         // TODO: auto create new file
         if (!sign_setTime) {
-            // Serial.println("Get time from NTP server!");
             if (sign_beginNTPClient) {
-                // TODO: 获取日期，包括年月日时分秒，格式为：2004-10-28  23:14:05
+                // TODO: 获取日期，包括年月日时分秒，格式为：2004_10_28__23_14_05
                 timeClient.update();
                 auto second = timeClient.getSeconds();
                 auto minute = timeClient.getMinutes();
                 auto hour = timeClient.getHours();
 
                 String date = dateParam.value();
-                nowTime = date + "  " + (String)(hour + 8) + ":" + (String)minute + ":" + (String)second;
+                // 将date字符串中的'-'替换为'_'
+                date.replace("-", "_");
+                nowTime = date + "__" + (String)(hour + 8) + "_" + (String)minute + "_" + (String)second;
                 fileName = "/data/" + nowTime + ".txt";
                 Serial.println(nowTime);
                 sign_setTime = true;
+                // Serial.println("Get time from NTP server!");
             } else {
                 String date = dateParam.value();
                 String time = timeParam.value();
-                fileName = "/data/" + date + " " + time + ".txt";
+                date.replace("-", "_");
+                time.replace(":", "_");
+                fileName = "/data/" + date + "__" + time + ".txt";
                 sign_setTime = true;
             }
         }
         SPIFFS.mkdir("/data");
-        static File file = SPIFFS.open(fileName, FILE_APPEND);
+        fileName = "/a.txt";
+        static File file;
+        file = SPIFFS.open(fileName, FILE_APPEND);
 
         static auto t_start = millis();
         // // read the sensor
@@ -287,7 +242,7 @@ void loop() {
         // Serial.print("\t");
         // Serial.println(IMU.temp(), 6);
         // delay(100);
-        READ_5611();
+        READ_5611(ms5611);
         height -= H0;
         height_filter -= H0;
 
@@ -305,101 +260,104 @@ void loop() {
         strcat(InformationToPrint, "\t ");
         strcat(InformationToPrint, "\r\n");
 
-        switch (MISSION_STAGE) {
+        switch (mission_stage) {
         case STAND_BY:
-            neopixelWrite(GPIO_RGB, atoi(RGB_BrightnessValue), 0, 0);
-            if (atoi(LaunchReadyValue) == true) {
-                MISSION_STAGE = PRE_LAUNCH;
-                digitalWrite(GPIO_RUN_SIGN, LOW);
+            neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
+            if (String(LaunchReadyValue) == "selected") {
+                mission_stage = PRE_LAUNCH;
+                digitalWrite(GPIO_RUN_SIGN, HIGH);
                 Serial.println("Mission start!");
-                appendFile(SPIFFS, "/a.txt", fileName.c_str(), file);
-                appendFile(SPIFFS, "/a.txt", "KEY IS PRESSED!\r\n", file);
             }
             break;
 
         case PRE_LAUNCH:
-            neopixelWrite(GPIO_RGB, atoi(RGB_BrightnessValue), atoi(RGB_BrightnessValue), 0);
+            neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, 0);
             break;
 
         case LAUNCHED:
-            neopixelWrite(GPIO_RGB, 0, atoi(RGB_BrightnessValue), 0);
+            neopixelWrite(GPIO_RGB, rgbBrightness, 0, 0);
             // record height
-            appendFile(SPIFFS, "/a.txt", InformationToPrint, file);
+            appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
-            if ((millis() - time_launch) > T_DETACH * 1000) {
+            if ((millis() - time_launch) > T_detach * 1000) {
                 digitalWrite(GPIO_FIRE, HIGH);
                 digitalWrite(GPIO_FIRE_SIGN, LOW);
-                MISSION_STAGE = DETACHED;
+                mission_stage = DETACHED;
                 // timerAlarmDisable(timer);
                 Serial.println("Detached!");
-                appendFile(SPIFFS, "/a.txt", "Detached!\r\n", file);
+                appendFile(file, "Detached!\r\n");
             }
 
             break;
 
         case DETACHED:
-            neopixelWrite(GPIO_RGB, 0, atoi(RGB_BrightnessValue), atoi(RGB_BrightnessValue));
+            neopixelWrite(GPIO_RGB, 0, rgbBrightness, 0);
             // record height
-            appendFile(SPIFFS, "/a.txt", InformationToPrint, file);
+            appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
 
-            if ((millis() - time_launch) > (T_DETACH + DELTA_T_DETACH) * 1000) {
+            if ((millis() - time_launch) > (T_detach + DELTA_T_DETACH) * 1000) {
                 digitalWrite(GPIO_FIRE, LOW);
             }
             if (String(ParaMode_Value) == "height control") {
-                if (height_filter > HEIGHT_PARACHUTE) {
+                Serial.println("height control!");
+                if (height_filter > H_para) {
+                    Serial.println("height para!");
                     Sign_Parachute = true;
                     time_para = millis();
                     myservo1.write(180);
                     myservo2.write(180);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
-                    MISSION_STAGE = PRELAND;
+                    mission_stage = PRELAND;
                     Serial.printf("Height Parachute on!\r\n");
-                    appendFile(SPIFFS, "/a.txt", "Height Parachute on!\r\n", file);
+                    appendFile(file, "Height Parachute on!\r\n");
                 }
-                if (((millis() - time_launch) > (atof(T_ProtectValue) * 1000)) && (Sign_Parachute == false)) {
+                if (((millis() - time_launch) > (T_protectPara * 1000)) && (Sign_Parachute == false)) {
+                    Serial.println("time para!");
                     time_para = millis();
                     myservo1.write(180);
                     myservo2.write(180);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
-                    MISSION_STAGE = PRELAND;
+                    mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
-                    appendFile(SPIFFS, "/a.txt", "Time Parachute on!\r\n", file);
+                    appendFile(file, "Time Protect Parachute on!\r\n");
                 }
             } else if (String(ParaMode_Value) == "time control") {
-                if ((millis() - time_launch) > (T_PARACHUTE * 1000)) {
+                Serial.println("time control!");
+                if ((millis() - time_launch) > (T_para * 1000)) {
                     time_para = millis();
                     myservo1.write(180);
                     myservo2.write(180);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
-                    MISSION_STAGE = PRELAND;
+                    mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
-                    appendFile(SPIFFS, "/a.txt", "Time Parachute on!\r\n", file);
+                    appendFile(file, "Time Parachute on!\r\n");
                 }
-                break;
             }
+            break;
+
         case PRELAND:
-            neopixelWrite(GPIO_RGB, 0, 0, atoi(RGB_BrightnessValue));
-            // record height
-            appendFile(SPIFFS, "/a.txt", InformationToPrint, file);
+            neopixelWrite(GPIO_RGB, 0, 0, rgbBrightness);
+            appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
             if (height_filter < HEIGHT_LAND) {
-                MISSION_STAGE = LANDED;
+                mission_stage = LANDED;
                 Serial.printf("Preland!\r\n");
-                appendFile(SPIFFS, "/a.txt", "Preland!\r\n", file);
+                appendFile(file, "Preland!\r\n");
             }
             break;
 
         case LANDED:
-            neopixelWrite(GPIO_RGB, atoi(RGB_BrightnessValue), atoi(RGB_BrightnessValue), atoi(RGB_BrightnessValue));
-            // stop record
-            appendFile(SPIFFS, "/a.txt", "Landed!\r\n", file);
-            file.close();
+            neopixelWrite(GPIO_RGB, rgbBrightness, 0, rgbBrightness);
+            appendFile(file, "Landed!\r\n");
+
             digitalWrite(GPIO_FIRE_SIGN, HIGH);
             digitalWrite(GPIO_PARACHUTE_SIGN, HIGH);
             digitalWrite(GPIO_RUN_SIGN, HIGH);
-            // myservo.write(0);
-            MISSION_STAGE = STAND_BY;
+            myservo1.write(0);
+            myservo2.write(0);
+            file.close();
+            mission_stage = STAND_BY;
             break;
 
         default:
@@ -413,7 +371,7 @@ void loop() {
         auto start = millis();
         // TODO: Real-time Wireless Serial
         // Serial.println("Real-time Wireless Serial");
-        READ_5611();
+        READ_5611(ms5611);
         delay(30);
         height -= H0;
         height_filter -= H0;
@@ -422,11 +380,11 @@ void loop() {
         if (WiFi.status() != WL_CONNECTED) {
             Serial.println("Connecting to WiFi..");
             delay(1000);
-            neopixelWrite(GPIO_RGB, 0, 0, atoi(RGB_BrightnessValue));
+            neopixelWrite(GPIO_RGB, 0, 0, rgbBrightness);
         } else {
             // 如果没有连接到服务器
             if (!client.connected()) {  // Serial.println("1");
-                neopixelWrite(GPIO_RGB, atoi(RGB_BrightnessValue), 0, 0);
+                neopixelWrite(GPIO_RGB, rgbBrightness, 0, 0);
                 Serial.println("Waiting for reconnection with server.");
                 client.stop();
                 delay(1);
@@ -437,7 +395,7 @@ void loop() {
                     wifiClientRequest(rx_data);  // 向客户端发送数据
                 }
             } else {
-                neopixelWrite(GPIO_RGB, 0, atoi(RGB_BrightnessValue), 0);
+                neopixelWrite(GPIO_RGB, 0, rgbBrightness, 0);
                 // Tcp_Handler(Read_Tcp());
                 // Serial_callback();
                 wifiClientRequest(rx_data);  // 向客户端发送数据
@@ -448,73 +406,4 @@ void loop() {
         Serial.print(stop - start);
         Serial.println(" ms");
     }
-}
-float getHeight(MS5611 ms5611) {
-    float height = 44330.0 * (1.0 - pow(ms5611.getPressure() / 1013.25, 1 / 5.255));  // barometric
-    // float height = (pow((1013.25 / getPressure()), 1.0 / 5.257) - 1) * (getTemperature() + 273.15) / 0.65;  // hypsometric
-    return height;
-}
-void READ_5611() {
-    if ((ms5611.read()) != MS5611_READ_OK) {
-        Serial.print("Error in read: ");
-    } else {
-        // Serial.printf("Preassure: %.2f\r\n", MS5611.getPressure());
-        height = getHeight(ms5611);
-        AltitudeLPF_50.input = height;
-        height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
-        // AltitudeLPF_50.input = height_filter;
-        // height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
-    }
-}
-
-void appendFile(FS& fs, const char* path, const char* message, File file) {
-    Serial.printf("Appending to file: %s\r\n", path);
-    if (!file) {
-        Serial.println("- failed to open file for appending");
-        return;
-    }
-    if (file.print(message)) {
-        Serial.println("- message appended");
-    } else {
-        Serial.println("- append failed");
-    }
-}
-
-String getContentType(String filename) {
-    if (server.hasArg("download")) {
-        return "application/octet-stream";
-    } else if (filename.endsWith(".htm")) {
-        return "text/html";
-    } else if (filename.endsWith(".html")) {
-        return "text/html";
-    } else if (filename.endsWith(".css")) {
-        return "text/css";
-    } else if (filename.endsWith(".js")) {
-        return "application/javascript";
-    } else if (filename.endsWith(".png")) {
-        return "image/png";
-    } else if (filename.endsWith(".gif")) {
-        return "image/gif";
-    } else if (filename.endsWith(".jpg")) {
-        return "image/jpeg";
-    } else if (filename.endsWith(".ico")) {
-        return "image/x-icon";
-    } else if (filename.endsWith(".xml")) {
-        return "text/xml";
-    } else if (filename.endsWith(".pdf")) {
-        return "application/x-pdf";
-    } else if (filename.endsWith(".zip")) {
-        return "application/x-zip";
-    } else if (filename.endsWith(".gz")) {
-        return "application/x-gzip";
-    } else
-        return "text/plain";
-}
-
-bool exists(String path) {
-    bool status = false;
-    File file = SPIFFS.open(path, "r");
-    status = !file.isDirectory();
-    file.close();
-    return status;
 }

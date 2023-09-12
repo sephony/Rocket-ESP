@@ -15,7 +15,8 @@
 #define GPIO_F3_SIGN 17  // 舵机指示灯
 
 #define GPIO_EXTI 1  // 外部中断
-#define GPIO_RGB 9   // RGB灯
+// #define GPIO_RGB 9   // RGB灯
+#define GPIO_RGB LED_BUILTIN  // RGB灯
 
 #define GPIO_KEY_BOOT 21  // 按键
 #define GPIO_KEY_AP 35

@@ -1,6 +1,7 @@
 #include "Varibles.h"
 
 /***** Priavte Varibles Definition*****/
+// File file;
 /* Main Program Varibles */
 unsigned long time_launch;
 unsigned long time_para;
@@ -14,13 +15,21 @@ char str_time[20];
 char InformationToPrint[100];
 
 float H0 = 0;
-float T_DETACH = 1.0;
-float T_PARACHUTE = 6.0;
-int HEIGHT_PARACHUTE = 65;
+double T_detach;
+double T_para;
+double H_para;
+double T_protectPara;
+unsigned int rgbBrightness;
 
 String nowTime;
 String fileName;
+String lastFileName;
+String lastRunMode;
+String lastLaunchMode;
+String lastLaunchReady;
 
 bool Sign_Parachute = false;
 bool sign_setTime = false;
 bool sign_beginNTPClient = false;
+bool sign_timeUpdate = false;
+bool sign_needReset = false;
