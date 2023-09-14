@@ -19,6 +19,5 @@ extern mission_stage_t mission_stage;
 extern MS5611 ms5611;  // ESP32 HW SPI
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
 extern ICM42688 IMU;
-extern Servo myservo1;
-extern Servo myservo2;
+
 #endif /* MAIN_H_ */

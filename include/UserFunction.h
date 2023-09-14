@@ -6,6 +6,10 @@
 #include <MS5611.h>
 #include <SPIFFS.h>
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "AP.h"
 #include "Filter.h"
 #include "main.h"
@@ -18,5 +22,5 @@ void appendFile(File file, String message);
 String getContentType(String filename);  // 获取文件类型
 bool exists(String path);                // 判断文件是否存在
 bool handleFileRead(String path);        // 处理文件读取
-
+std::string html_to_string(const std::string& file_path);
 #endif /* USERFUNCTION_H_ */

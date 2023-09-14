@@ -2,12 +2,49 @@
 <html>
 
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1 user-scalable=no">
+    <meta charset="UTF-8">
+    <title>火箭调参</title>
     <style>
         body {
             margin: 0;
             padding: 0;
+            background-color: #f2f2f2;
             font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            color: #333333;
+            text-align: center;
+        }
+
+        ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        li {
+            padding: 12px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #dddddd;
+        }
+
+        a {
+            color: #333333;
+            text-decoration: none;
+        }
+
+        p.bottom {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+        }
+
+        img {
+            float: top;
+            margin-top: 10px;
+            /* margin-bottom: 10px; */
         }
 
         .sidebar {
@@ -28,7 +65,7 @@
         .sidebar ul {
             list-style: none;
             padding: 0;
-            margin: 0;
+            margin: 60px 0 0 0;
         }
 
         .sidebar li {
@@ -38,6 +75,21 @@
 
         .sidebar li:last-child {
             border-bottom: none;
+        }
+
+        .sidebar li a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .sidebar p {
+            position: absolute;
+        }
+
+        .sidebar p.bottom {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
         }
 
         .button {
@@ -50,59 +102,45 @@
             border-radius: 50%;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
             cursor: pointer;
-            transition: transform 0.5s ease-in-out;
+            transition: transform 0.1s ease-in-out;
         }
 
-        .button.rotate {
-            transform: rotate(180deg);
-        }
-
-        .button span {
-            display: block;
-            width: 20px;
-            height: 2px;
-            background-color: #333333;
-            position: absolute;
-            top: 24px;
-            left: 15px;
-            transition: transform 0.5s ease-in-out;
-        }
-
-        .button.rotate span:first-child {
-            transform: rotate(45deg);
-            top: 20px;
-            left: 12px;
-        }
-
-        .button.rotate span:last-child {
-            transform: rotate(-45deg);
-            top: 28px;
-            left: 12px;
+        .button:active {
+            transform: scale(0.8);
         }
     </style>
 </head>
 
 <body>
+    <h1>火箭调参</h1>
+    <ul>
+        <li><strong>二级点火时间:</strong>
+            FileNameValue</li>
+        <li><strong>开伞时间:</strong>
+            atoi(T_DetachValue)</li>
+        <li><strong>开伞高度:</strong>
+            atof(T_ParaValue)</li>
+        <li><strong>保护开伞时间:</strong>
+            atof(H_ParaValue)</li>
+        <li><strong>日期:</strong>timeParam.value()</li>
+        <p class="bottom">Made By <em><strong>HITMA Rocket Team</strong></p>
+    </ul>
+    <p>前往<a href='config' style='color: #007bff; text-decoration: none; font-weight: bold;'>配置页面</a>调整参数。</p>
     <div class="sidebar">
         <ul>
-            <li>选项1</li>
-            <li>选项2</li>
-            <li>选项3</li>
-            <li>选项4</li>
-            <li>选项5</li>
+            <li><a href="">选项1</a></li>
+            <li><a href='dir' style='color: #007bff; text-decoration: none; font-weight: bold;'>高度数据</a></li>
+            <li><a href='config' style='color: #007bff; text-decoration: none; font-weight: bold;'>配置</a></li>
+            <li><a href='update' style='color: #007bff; text-decoration: none; font-weight: bold;'>更新</a></li>
         </ul>
+        <p>version 2.0</p>
     </div>
-    <div class="button" onclick="toggleSidebar()">
-        <span></span>
-        <span></span>
-        <span></span>
-    </div>
+    <div class="button" onclick="toggleSidebar()"></div>
     <script>
         function toggleSidebar() {
             var sidebar = document.querySelector('.sidebar');
             var button = document.querySelector('.button');
             sidebar.classList.toggle('open');
-            button.classList.toggle('rotate');
         }
     </script>
 </body>

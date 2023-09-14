@@ -2,6 +2,8 @@
 
 /***** Priavte Varibles Definition*****/
 // File file;
+std::vector<std::array<std::string, 2>> files;
+std::vector<std::string> dirs;
 /* Main Program Varibles */
 unsigned long time_launch;
 unsigned long time_para;
@@ -33,3 +35,4 @@ bool sign_setTime = false;
 bool sign_beginNTPClient = false;
 bool sign_timeUpdate = false;
 bool sign_needReset = false;
+bool sign_initServo = false;

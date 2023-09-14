@@ -102,3 +102,24 @@ bool handleFileRead(String path) {
     }
     return false;
 }
+
+std::string html_to_string(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << file_path << std::endl;
+        return "";
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string html_string = buffer.str();
+
+    // Escape double quotes
+    size_t pos = 0;
+    while ((pos = html_string.find("\"", pos)) != std::string::npos) {
+        html_string.replace(pos, 1, "\\\"");
+        pos += 2;
+    }
+
+    return html_string;
+}

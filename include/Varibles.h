@@ -3,7 +3,13 @@
 
 #include <Arduino.h>
 #include <FS.h>
+
+#include <array>
+#include <string>
+#include <vector>
 /***** Priavte Varibles Definition*****/
+extern std::vector<std::array<std::string, 2>> files;
+extern std::vector<std::string> dirs;
 // extern File file;
 /* Main Program Varibles */
 extern unsigned long time_launch;
@@ -35,6 +41,7 @@ extern bool sign_setTime;
 extern bool sign_beginNTPClient;
 extern bool sign_timeUpdate;
 extern bool sign_needReset;
+extern bool sign_initServo;
 
 // extern char temp[20];
 

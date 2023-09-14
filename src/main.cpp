@@ -32,8 +32,10 @@ mission_stage_t mission_stage;
 MS5611 ms5611(0x77);  // ESP32 HW SPI
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
 ICM42688 IMU(SPI, ICM42688_CS);
-Servo myservo1;
-Servo myservo2;
+
+ESP32PWM pwm_para;
+ESP32PWM pwm_servo_1;
+ESP32PWM pwm_servo_2;
 
 /***** Initialization Fuction Definition *****/
 void setup() {
@@ -93,18 +95,24 @@ void setup() {
     ESP32PWM::allocateTimer(1);
     ESP32PWM::allocateTimer(2);
     ESP32PWM::allocateTimer(3);
-    myservo1.setPeriodHertz(50);
-    myservo2.setPeriodHertz(50);
-    myservo1.attach(GPIO_SERVO_1, 1000, 2000);
-    myservo2.attach(GPIO_SERVO_2, 1000, 2000);
-    myservo1.write(0);
-    myservo2.write(0);
+    // myservo1.setPeriodHertz(50);
+    // myservo2.setPeriodHertz(50);
+
+    // myservo1.attach(GPIO_SERVO_1, 500, 2500);
+    // myservo2.attach(GPIO_SERVO_2, 500, 2500);
+    // myservo1.write(0);
+    // myservo2.write(0);
+    pwm_para.attachPin(7, 50, 10);
+    pwm_servo_1.attachPin(47, 50, 10);
+    pwm_servo_2.attachPin(38, 50, 10);
+    // pwm4.attachPin(38, 50, 10);
     Serial.println("Servo initalized!");
 
     /** init FS **/
     if (!SPIFFS.begin(true)) {
         Serial.println("SPIFFS mount failed!");
     }
+    SPIFFS.mkdir("/data");
     // SPIFFS.format();
     Serial.println("SPIFFS mounted!");
     Serial.printf("SPIFFS total memory: %d (Byte)\n", SPIFFS.totalBytes());
@@ -114,9 +122,32 @@ void setup() {
     File root = SPIFFS.open("/");
     File file_temp = root.openNextFile();
     while (file_temp) {
-        Serial.println(file_temp.path());
+        if (file_temp.isDirectory()) {
+            dirs.push_back(file_temp.name());
+        } else {
+            files.push_back({file_temp.name(), file_temp.path()});
+        }
         file_temp = root.openNextFile();
     }
+
+    Serial.println("SPIFFS file list:");
+    for (auto file : files) {
+        Serial.println(file[0].c_str());
+    }
+    // 把files第1，2个'_'替换为'-'，第四个后面的'_'替换为':'，并按时间从小到大排序
+    for (auto& file : files) {
+        file[0].replace(4, 1, "-");
+        file[0].replace(7, 1, "-");
+        file[0].replace(10, 1, " ");
+        file[0].replace(11, 1, " ");
+        file[0].replace(14, 1, ":");
+    }
+
+    // std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
+    //     return a[0] < b[0];
+    // });
+    Serial.println("SPIFFS dir list:");
+
     group_mode.addItem(&RunMode_Param);
     group_mode.addItem(&ParaMode_Param);
     group_mode.addItem(&LaunchReadyParam);
@@ -153,7 +184,7 @@ void setup() {
 
     server.on("/", handleRoot);
     server.on("/config", [] { iotWebConf.handleConfig(); });
-    // server.on("/dir", handleDir);
+    server.on("/dir", handleDir);
     server.onNotFound([]() {
         if (!handleFileRead(server.uri())) {
             iotWebConf.handleNotFound();
@@ -185,7 +216,23 @@ void loop() {
     iotWebConf.doLoop();
     // server.handleClient();
 
-    if (sign_needReset) {
+    // for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+    //     // Write a unit vector value from 0.0 to 1.0
+    //     pwm1.writeScaled(brightness);
+    //     pwm2.writeScaled(brightness);
+    //     pwm3.writeScaled(brightness);
+    //     // pwm4.writeScaled(brightness);
+    //     delay(15);
+    // }
+    // for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+    //     pwm1.writeScaled(brightness);
+    //     pwm2.writeScaled(brightness);
+    //     pwm3.writeScaled(brightness);
+    //     // pwm4.writeScaled(brightness);
+    //     delay(15);
+    // }
+
+    if (sign_needReset || !digitalRead(GPIO_KEY_AP)) {
         Serial.println("Rebooting after 1 second.");
         delay(1000);
         ESP.restart();
@@ -196,16 +243,15 @@ void loop() {
         // TODO: auto create new file
         if (!sign_setTime) {
             if (sign_beginNTPClient) {
-                // TODO: 获取日期，包括年月日时分秒，格式为：2004_10_28__23_14_05
+                // TODO: 获取日期，包括年月日时分秒，格式为：2004_10_28__23_14
                 timeClient.update();
-                auto second = timeClient.getSeconds();
                 auto minute = timeClient.getMinutes();
                 auto hour = timeClient.getHours();
 
                 String date = dateParam.value();
                 // 将date字符串中的'-'替换为'_'
                 date.replace("-", "_");
-                nowTime = date + "__" + (String)(hour + 8) + "_" + (String)minute + "_" + (String)second;
+                nowTime = date + "__" + (String)(hour + 8) + "_" + (String)minute;
                 fileName = "/data/" + nowTime + ".txt";
                 Serial.println(nowTime);
                 sign_setTime = true;
@@ -219,12 +265,12 @@ void loop() {
                 sign_setTime = true;
             }
         }
-        SPIFFS.mkdir("/data");
-        fileName = "/a.txt";
+
         static File file;
         file = SPIFFS.open(fileName, FILE_APPEND);
 
         static auto t_start = millis();
+
         // // read the sensor
         // IMU.getAGT();
         // // display the data
@@ -260,6 +306,13 @@ void loop() {
         strcat(InformationToPrint, "\t ");
         strcat(InformationToPrint, "\r\n");
 
+        if (!sign_initServo) {
+            pwm_para.writeScaled(0.025);
+            pwm_servo_1.writeScaled(0.025);
+            pwm_servo_2.writeScaled(0.025);
+            sign_initServo = true;
+            Serial.println("Servo initalized!");
+        }
         switch (mission_stage) {
         case STAND_BY:
             neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
@@ -305,8 +358,7 @@ void loop() {
                     Serial.println("height para!");
                     Sign_Parachute = true;
                     time_para = millis();
-                    myservo1.write(180);
-                    myservo2.write(180);
+                    pwm_para.writeScaled(0.125);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Height Parachute on!\r\n");
@@ -315,8 +367,7 @@ void loop() {
                 if (((millis() - time_launch) > (T_protectPara * 1000)) && (Sign_Parachute == false)) {
                     Serial.println("time para!");
                     time_para = millis();
-                    myservo1.write(180);
-                    myservo2.write(180);
+                    pwm_para.writeScaled(0.125);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
@@ -326,8 +377,7 @@ void loop() {
                 Serial.println("time control!");
                 if ((millis() - time_launch) > (T_para * 1000)) {
                     time_para = millis();
-                    myservo1.write(180);
-                    myservo2.write(180);
+                    pwm_para.writeScaled(0.125);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
@@ -350,21 +400,19 @@ void loop() {
         case LANDED:
             neopixelWrite(GPIO_RGB, rgbBrightness, 0, rgbBrightness);
             appendFile(file, "Landed!\r\n");
-
+            appendFile(file, "\n\n\n\n");
             digitalWrite(GPIO_FIRE_SIGN, HIGH);
             digitalWrite(GPIO_PARACHUTE_SIGN, HIGH);
             digitalWrite(GPIO_RUN_SIGN, HIGH);
-            myservo1.write(0);
-            myservo2.write(0);
             file.close();
             mission_stage = STAND_BY;
+            // sign_initServo = false;
             break;
 
         default:
             break;
         }
     } else if (String(RunModeValue) == "Advanced") {
-        // TODO: Advanced
     } else if (String(RunModeValue) == "debug") {
         // TODO: Debug
     } else if (String(RunModeValue) == "Real-time Wireless Serial") {

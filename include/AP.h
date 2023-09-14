@@ -12,6 +12,7 @@
 #include <NTPClient.h>
 
 #include "PinConfig.h"
+#include "UserFunction.h"
 #include "Varibles.h"
 
 using iotwebconf::CheckboxParameter;
