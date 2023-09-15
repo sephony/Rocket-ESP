@@ -20,4 +20,5 @@ extern MS5611 ms5611;  // ESP32 HW SPI
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
 extern ICM42688 IMU;
 
+#define ANGLE(X) (0.025 + (X) / 1800)
 #endif /* MAIN_H_ */

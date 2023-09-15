@@ -16,6 +16,7 @@
 
 // Sensors
 #include <ICM42688.h>
+#include <JY901.h>
 #include <MS5611.h>
 #include <Wire.h>
 
@@ -31,7 +32,8 @@ mission_stage_t mission_stage;
 /***** Class Definition *****/
 MS5611 ms5611(0x77);  // ESP32 HW SPI
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
-ICM42688 IMU(SPI, ICM42688_CS);
+// SPIClass SPI_IMU(FSPI);
+// ICM42688 IMU(SPI_IMU, ICM42688_CS);
 
 ESP32PWM pwm_para;
 ESP32PWM pwm_servo_1;
@@ -85,10 +87,9 @@ void setup() {
     //     Serial.println("Check IMU wiring or try cycling power");
     //     Serial.print("Status: ");
     //     Serial.println(status);
-    //     while (1) {
-    //     }
     // }
     // Serial.println("ax,ay,az,gx,gy,gz,temp_C");
+    // JY901.StartIIC(IIC_SDA, IIC_SCL);
 
     /** init servo **/
     ESP32PWM::allocateTimer(0);
@@ -97,15 +98,13 @@ void setup() {
     ESP32PWM::allocateTimer(3);
     // myservo1.setPeriodHertz(50);
     // myservo2.setPeriodHertz(50);
-
     // myservo1.attach(GPIO_SERVO_1, 500, 2500);
     // myservo2.attach(GPIO_SERVO_2, 500, 2500);
     // myservo1.write(0);
     // myservo2.write(0);
-    pwm_para.attachPin(7, 50, 10);
+    pwm_para.attachPin(38, 50, 10);
     pwm_servo_1.attachPin(47, 50, 10);
-    pwm_servo_2.attachPin(38, 50, 10);
-    // pwm4.attachPin(38, 50, 10);
+    pwm_servo_2.attachPin(48, 50, 10);
     Serial.println("Servo initalized!");
 
     /** init FS **/
@@ -143,9 +142,9 @@ void setup() {
         file[0].replace(14, 1, ":");
     }
 
-    // std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
-    //     return a[0] < b[0];
-    // });
+    std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
+        return a[0] < b[0];
+    });
     Serial.println("SPIFFS dir list:");
 
     group_mode.addItem(&RunMode_Param);
@@ -157,12 +156,16 @@ void setup() {
     group_heightControl.addItem(&T_ProtectParam);
     group_timeControl.addItem(&T_DetachParam);
     group_timeControl.addItem(&T_ParaParam);
+    group_mqtt.addItem(&mqttServerParam);
+    group_mqtt.addItem(&mqttUserNameParam);
+    group_mqtt.addItem(&mqttUserPasswordParam);
     group_RGB.addItem(&RGB_BrightnessParam);
 
     iotWebConf.addParameterGroup(&group_mode);
     iotWebConf.addParameterGroup(&group_time);
     iotWebConf.addParameterGroup(&group_heightControl);
     iotWebConf.addParameterGroup(&group_timeControl);
+    iotWebConf.addParameterGroup(&group_mqtt);
     iotWebConf.addParameterGroup(&group_RGB);
 
     iotWebConf.setConfigPin(CONFIG_PIN);
@@ -190,6 +193,10 @@ void setup() {
             iotWebConf.handleNotFound();
         }
     });
+
+    mqttClient.begin(mqttServerValue, net);
+    mqttClient.onMessage(mqttMessageReceived);
+
     Serial.println("HTTP server started");
     Serial.println("initialize done!");
 
@@ -198,6 +205,10 @@ void setup() {
     H_para = atof(H_ParaValue);
     T_protectPara = atof(T_ProtectValue);
     rgbBrightness = atoi(RGB_BrightnessValue);
+
+    lastRunMode = (String)RunModeValue;
+    lastParaMode = (String)ParaModeValue;
+    lastLaunchReady = (String)LaunchReadyValue;
 
     auto start = millis();
     ms5611.read();
@@ -215,22 +226,6 @@ void setup() {
 void loop() {
     iotWebConf.doLoop();
     // server.handleClient();
-
-    // for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
-    //     // Write a unit vector value from 0.0 to 1.0
-    //     pwm1.writeScaled(brightness);
-    //     pwm2.writeScaled(brightness);
-    //     pwm3.writeScaled(brightness);
-    //     // pwm4.writeScaled(brightness);
-    //     delay(15);
-    // }
-    // for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
-    //     pwm1.writeScaled(brightness);
-    //     pwm2.writeScaled(brightness);
-    //     pwm3.writeScaled(brightness);
-    //     // pwm4.writeScaled(brightness);
-    //     delay(15);
-    // }
 
     if (sign_needReset || !digitalRead(GPIO_KEY_AP)) {
         Serial.println("Rebooting after 1 second.");
@@ -267,7 +262,7 @@ void loop() {
         }
 
         static File file;
-        file = SPIFFS.open(fileName, FILE_APPEND);
+        file = SPIFFS.open(fileName, FILE_WRITE);
 
         static auto t_start = millis();
 
@@ -352,7 +347,7 @@ void loop() {
             if ((millis() - time_launch) > (T_detach + DELTA_T_DETACH) * 1000) {
                 digitalWrite(GPIO_FIRE, LOW);
             }
-            if (String(ParaMode_Value) == "height control") {
+            if (String(ParaModeValue) == "height control") {
                 Serial.println("height control!");
                 if (height_filter > H_para) {
                     Serial.println("height para!");
@@ -373,7 +368,7 @@ void loop() {
                     Serial.printf("Time Parachute on!\r\n");
                     appendFile(file, "Time Protect Parachute on!\r\n");
                 }
-            } else if (String(ParaMode_Value) == "time control") {
+            } else if (String(ParaModeValue) == "time control") {
                 Serial.println("time control!");
                 if ((millis() - time_launch) > (T_para * 1000)) {
                     time_para = millis();
@@ -413,8 +408,140 @@ void loop() {
             break;
         }
     } else if (String(RunModeValue) == "Advanced") {
-    } else if (String(RunModeValue) == "debug") {
+        mqttClient.loop();
+        if (sign_needMqttConnect) {
+            if (connectMqtt()) {
+                sign_needMqttConnect = false;
+            }
+        } else if ((iotWebConf.getState() == iotwebconf::OnLine) && (!mqttClient.connected())) {
+            Serial.println("MQTT reconnect");
+            connectMqtt();
+        }
+        unsigned long now = millis();
+        if ((500 < now - lastReport) && (mqttClient.connected())) {
+            static File file = SPIFFS.open(fileName, FILE_READ);
+            String data = file.readString();
+            lastReport = now;
+            Serial.print("Sending on MQTT channel 'test/data' :");
+            Serial.println(data);
+            mqttClient.publish("test/data", data);
+        }
+    } else if (String(RunModeValue) == "Debug") {
         // TODO: Debug
+        static bool open_servo_1 = false;
+        Serial.print("open_servo_1:");
+        Serial.println(open_servo_1);
+        neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
+        if (open_servo_1) {
+            for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                // Write a unit vector value from 0.0 to 1.0
+                pwm_servo_1.writeScaled(brightness);
+                pwm_servo_2.writeScaled(brightness);
+                delay(15);
+            }
+            for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                pwm_servo_1.writeScaled(brightness);
+                pwm_servo_2.writeScaled(brightness);
+                delay(15);
+                open_servo_1 = true;
+            }
+        } else {
+            for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                // Write a unit vector value from 0.0 to 1.0
+                pwm_servo_1.writeScaled(brightness);
+                delay(15);
+            }
+            for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                pwm_servo_1.writeScaled(brightness);
+                delay(15);
+            }
+            open_servo_1 = true;
+        }
+
+        // JY901.GetTime();
+        // Serial.print("Time:20");
+        // Serial.print(JY901.stcTime.ucYear);
+        // Serial.print("-");
+        // Serial.print(JY901.stcTime.ucMonth);
+        // Serial.print("-");
+        // Serial.print(JY901.stcTime.ucDay);
+        // Serial.print(" ");
+        // Serial.print(JY901.stcTime.ucHour);
+        // Serial.print(":");
+        // Serial.print(JY901.stcTime.ucMinute);
+        // Serial.print(":");
+        // Serial.println((float)JY901.stcTime.ucSecond + (float)JY901.stcTime.usMiliSecond / 1000);
+
+        // JY901.GetAcc();
+        // Serial.print("Acc:");
+        // Serial.print((float)JY901.stcAcc.a[0] / 32768 * 16);
+        // Serial.print(" ");
+        // Serial.print((float)JY901.stcAcc.a[1] / 32768 * 16);
+        // Serial.print(" ");
+        // Serial.println((float)JY901.stcAcc.a[2] / 32768 * 16);
+
+        // JY901.GetGyro();
+        // Serial.print("Gyro:");
+        // Serial.print((float)JY901.stcGyro.w[0] / 32768 * 2000);
+        // Serial.print(" ");
+        // Serial.print((float)JY901.stcGyro.w[1] / 32768 * 2000);
+        // Serial.print(" ");
+        // Serial.println((float)JY901.stcGyro.w[2] / 32768 * 2000);
+
+        // JY901.GetAngle();
+        // Serial.print("Angle:");
+        // Serial.print((float)JY901.stcAngle.Angle[0] / 32768 * 180);
+        // Serial.print(" ");
+        // Serial.print((float)JY901.stcAngle.Angle[1] / 32768 * 180);
+        // Serial.print(" ");
+        // Serial.println((float)JY901.stcAngle.Angle[2] / 32768 * 180);
+
+        // JY901.GetMag();
+        // Serial.print("Mag:");
+        // Serial.print(JY901.stcMag.h[0]);
+        // Serial.print(" ");
+        // Serial.print(JY901.stcMag.h[1]);
+        // Serial.print(" ");
+        // Serial.println(JY901.stcMag.h[2]);
+
+        // JY901.GetPress();
+        // Serial.print("Pressure:");
+        // Serial.print(JY901.stcPress.lPressure);
+        // Serial.print(" ");
+        // Serial.println((float)JY901.stcPress.lAltitude / 100);
+
+        // JY901.GetDStatus();
+        // Serial.print("DStatus:");
+        // Serial.print(JY901.stcDStatus.sDStatus[0]);
+        // Serial.print(" ");
+        // Serial.print(JY901.stcDStatus.sDStatus[1]);
+        // Serial.print(" ");
+        // Serial.print(JY901.stcDStatus.sDStatus[2]);
+        // Serial.print(" ");
+        // Serial.println(JY901.stcDStatus.sDStatus[3]);
+
+        // JY901.GetLonLat();
+        // Serial.print("Longitude:");
+        // Serial.print(JY901.stcLonLat.lLon / 10000000);
+        // Serial.print("Deg");
+        // Serial.print((double)(JY901.stcLonLat.lLon % 10000000) / 1e5);
+        // Serial.print("m Lattitude:");
+        // Serial.print(JY901.stcLonLat.lLat / 10000000);
+        // Serial.print("Deg");
+        // Serial.print((double)(JY901.stcLonLat.lLat % 10000000) / 1e5);
+        // Serial.println("m");
+
+        // JY901.GetGPSV();
+        // Serial.print("GPSHeight:");
+        // Serial.print((float)JY901.stcGPSV.sGPSHeight / 10);
+        // Serial.print("m GPSYaw:");
+        // Serial.print((float)JY901.stcGPSV.sGPSYaw / 10);
+        // Serial.print("Deg GPSV:");
+        // Serial.print((float)JY901.stcGPSV.lGPSVelocity / 1000);
+        // Serial.println("km/h");
+
+        // Serial.println("");
+        // delay(500);
     } else if (String(RunModeValue) == "Real-time Wireless Serial") {
         auto start = millis();
         // TODO: Real-time Wireless Serial

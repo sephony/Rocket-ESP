@@ -33,8 +33,10 @@ extern String nowTime;
 extern String fileName;
 extern String lastFileName;
 extern String lastRunMode;
-extern String lastLaunchMode;
+extern String lastParaMode;
 extern String lastLaunchReady;
+extern unsigned long lastReport;
+extern unsigned long lastMqttConnectionAttempt;
 
 extern bool Sign_Parachute;
 extern bool sign_setTime;
@@ -42,6 +44,7 @@ extern bool sign_beginNTPClient;
 extern bool sign_timeUpdate;
 extern bool sign_needReset;
 extern bool sign_initServo;
+extern bool sign_needMqttConnect;
 
 // extern char temp[20];
 

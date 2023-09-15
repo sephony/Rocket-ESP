@@ -1,14 +1,14 @@
 #include "AP.h"
 
-std::string html_file_path = "/test/Rocket.html";
+std::string html_file_path = "/test/Rocket.html";  // html文件路径,暂时没用
 //  -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
 
 char RunModeValue[NUMBER_LEN];
 const char RunModeValues[][STRING_LEN] = {"Standard", "Advanced", "Debug", "Real-time Wireless Serial"};
 const char RunModeNames[][STRING_LEN] = {"标准模式", "高级模式", "调试模式", "实时无线串口模式"};
-char ParaMode_Value[STRING_LEN];
-const char LaunchModeValues[][STRING_LEN] = {"time control", "height control"};
-const char LaunchModeNames[][STRING_LEN] = {"定时开伞", "定高开伞"};
+char ParaModeValue[STRING_LEN];
+const char ParaModeValues[][STRING_LEN] = {"time control", "height control"};
+const char ParaModeNames[][STRING_LEN] = {"定时开伞", "定高开伞"};
 char LaunchReadyValue[STRING_LEN];
 
 char H_ParaValue[NUMBER_LEN];     // 开伞高度
@@ -18,12 +18,13 @@ char T_ParaValue[NUMBER_LEN];     // 开伞时间
 
 char RGB_BrightnessValue[NUMBER_LEN];  // RGB亮度
 
+char mqttServerValue[STRING_LEN];
+char mqttUserNameValue[STRING_LEN];
+char mqttUserPasswordValue[STRING_LEN];
+
 const char thingName[] = "Rocket";  // -- Name of the Thing. Used e.g. as SSID of the own Access Point.
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
 const char wifiInitialApPassword[] = "88888888";
-
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
 
 // DNS server
 DNSServer dnsServer;
@@ -31,6 +32,12 @@ DNSServer dnsServer;
 WebServer server(80);
 // HTTP Update Server
 HTTPUpdateServer httpUpdater;
+// MQTT 远程发送
+WiFiClient net;
+MQTTClient mqttClient;
+// 实时获取时间
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
 
 // Web configuration instance.
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
@@ -52,21 +59,22 @@ ParameterGroup group_mode("_模式选择", "模式选择");
 ParameterGroup group_time("_日期与时间", "日期与时间");
 ParameterGroup group_heightControl("_高度控制", "高度控制");
 ParameterGroup group_timeControl("_时间控制", "时间控制");
+ParameterGroup group_mqtt("mqtt", "MQTT configuration");
 ParameterGroup group_RGB("_RGB灯", "RGB灯");
 
 // Parameters.
 // TextParameter FileNameParam("文件名", "FileName", FileNameValue, STRING_LEN);
 SelectParameter RunMode_Param("运行模式", "RunMode_Param", RunModeValue, STRING_LEN,
-                              (const char*)RunModeValues,
-                              (const char*)RunModeNames,
+                              (const char *)RunModeValues,
+                              (const char *)RunModeNames,
                               sizeof(RunModeValues) / STRING_LEN,
                               STRING_LEN,
                               "Standard");
 
-SelectParameter ParaMode_Param("发射模式", "LaunchMode", ParaMode_Value, STRING_LEN,
-                               (const char*)LaunchModeValues,
-                               (const char*)LaunchModeNames,
-                               sizeof(LaunchModeValues) / STRING_LEN,
+SelectParameter ParaMode_Param("开伞模式", "LaunchMode", ParaModeValue, STRING_LEN,
+                               (const char *)ParaModeValues,
+                               (const char *)ParaModeNames,
+                               sizeof(ParaModeValues) / STRING_LEN,
                                STRING_LEN,
                                "height control");
 
@@ -104,6 +112,15 @@ iotwebconf::TimeTParameter timeParam =
         .label("选择时间")
         .defaultValue("12:00")
         .build();
+
+TextParameter mqttServerParam("MQTT server", "mqttServer", mqttServerValue, STRING_LEN,
+                              "public.cloud.shiftr.io");
+
+TextParameter mqttUserNameParam("MQTT user", "mqttUser", mqttUserNameValue, STRING_LEN,
+                                "public");
+
+PasswordParameter mqttUserPasswordParam("MQTT password", "mqttPass", mqttUserPasswordValue, STRING_LEN,
+                                        "public");
 
 NumberParameter RGB_BrightnessParam("RGB亮度", "RGB_BrightnessParam", RGB_BrightnessValue, NUMBER_LEN,
                                     "64",
@@ -159,7 +176,7 @@ NumberParameter RGB_BrightnessParam("RGB亮度", "RGB_BrightnessParam", RGB_Brig
 //         .build();
 
 void handleRoot() {
-    // -- Let IotWebConf test and handle captive portal requests.
+    // -- Let  test and handle captive portal requests.
     if (iotWebConf.handleCaptivePortal()) {
         // -- Captive portal request were already served.
         return;
@@ -245,9 +262,15 @@ void wifiConnected() {
     Serial.println("Wifi connected.");
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-    timeClient.begin();
-    sign_beginNTPClient = true;
-    Serial.println("TimeClient was started.");
+    if (String(RunModeValue) == "Standard") {
+        timeClient.begin();
+        sign_beginNTPClient = true;
+        Serial.println("TimeClient was started.");
+    } else if (String(RunModeValue) == "Advanced") {
+        sign_needMqttConnect = true;
+    } else if (String(RunModeValue) == "Debug") {
+    } else if (String(RunModeValue) == "Real-time Wireless Serial") {
+    }
 }
 void configSaved() {
     Serial.println("Configuration was updated.");
@@ -264,14 +287,15 @@ void configSaved() {
     T_protectPara = atof(T_ProtectValue);
     rgbBrightness = atoi(RGB_BrightnessValue);
 
-    if (((String)RunModeValue != lastRunMode) || ((String)LaunchReadyValue == "selected")) {
+    if (((String)RunModeValue != lastRunMode)) {
         Serial.printf("Run mode is changed to:");
         Serial.println(RunModeValue);
         lastRunMode = (String)RunModeValue;
-        sign_needReset = true;
+        ESP.restart();
+        // sign_needReset = true;
     }
 }
-bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
+bool formValidator(iotwebconf::WebRequestWrapper *webRequestWrapper) {
     Serial.println("Validating form.");
     bool valid = true;
     // -- Note: multipleWifiAddition.formValidator() should be called, as
@@ -285,5 +309,58 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
         valid = false;
       }
     */
+    int l = webRequestWrapper->arg(mqttServerParam.getId()).length();
+    if (l < 3) {
+        mqttServerParam.errorMessage = "Please provide at least 3 characters!";
+        valid = false;
+    }
+
     return valid;
+}
+
+bool connectMqtt() {
+    unsigned long now = millis();
+    if (1000 > now - lastMqttConnectionAttempt) {
+        // Do not repeat within 1 sec.
+        return false;
+    }
+    Serial.println("Connecting to MQTT server...");
+    if (!connectMqttOptions()) {
+        lastMqttConnectionAttempt = now;
+        return false;
+    }
+    Serial.println("Connected!");
+
+    mqttClient.subscribe("test/data");
+    return true;
+}
+
+/*
+// -- This is an alternative MQTT connection method.
+bool connectMqtt() {
+  Serial.println("Connecting to MQTT server...");
+  while (!connectMqttOptions()) {
+    iotWebConf.delay(1000);
+  }
+  Serial.println("Connected!");
+
+  mqttClient.subscribe("test/action");
+  return true;
+}
+*/
+
+bool connectMqttOptions() {
+    bool result;
+    if (mqttUserPasswordValue[0] != '\0') {
+        result = mqttClient.connect(iotWebConf.getThingName(), mqttUserNameValue, mqttUserPasswordValue);
+    } else if (mqttUserNameValue[0] != '\0') {
+        result = mqttClient.connect(iotWebConf.getThingName(), mqttUserNameValue);
+    } else {
+        result = mqttClient.connect(iotWebConf.getThingName());
+    }
+    return result;
+}
+
+void mqttMessageReceived(String &topic, String &payload) {
+    Serial.println("Incoming: " + topic + " - " + payload);
 }
