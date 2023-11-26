@@ -89,7 +89,7 @@ void setup() {
     //     Serial.println(status);
     // }
     // Serial.println("ax,ay,az,gx,gy,gz,temp_C");
-    // JY901.StartIIC(IIC_SDA, IIC_SCL);
+    JY901.StartIIC(IIC_SDA, IIC_SCL);
 
     /** init servo **/
     ESP32PWM::allocateTimer(0);
@@ -351,7 +351,7 @@ void loop() {
                 Serial.println("height control!");
                 if (height_filter > H_para) {
                     Serial.println("height para!");
-                    Sign_Parachute = true;
+                    sign_parachute = true;
                     time_para = millis();
                     pwm_para.writeScaled(0.125);
                     digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
@@ -359,7 +359,7 @@ void loop() {
                     Serial.printf("Height Parachute on!\r\n");
                     appendFile(file, "Height Parachute on!\r\n");
                 }
-                if (((millis() - time_launch) > (T_protectPara * 1000)) && (Sign_Parachute == false)) {
+                if (((millis() - time_launch) > (T_protectPara * 1000)) && (sign_parachute == false)) {
                     Serial.println("time para!");
                     time_para = millis();
                     pwm_para.writeScaled(0.125);
@@ -422,41 +422,47 @@ void loop() {
             static File file = SPIFFS.open(fileName, FILE_READ);
             String data = file.readString();
             lastReport = now;
-            Serial.print("Sending on MQTT channel 'test/data' :");
+            Serial.print("Sending on MQTT channel 'test/rocket/data' :");
             Serial.println(data);
-            mqttClient.publish("test/data", data);
+            mqttClient.publish("test/rocket/data", data);
         }
     } else if (String(RunModeValue) == "Debug") {
         // TODO: Debug
         static bool open_servo_1 = false;
-        Serial.print("open_servo_1:");
-        Serial.println(open_servo_1);
+        static bool open_servo = false;
         neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
-        if (open_servo_1) {
-            for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
-                // Write a unit vector value from 0.0 to 1.0
-                pwm_servo_1.writeScaled(brightness);
-                pwm_servo_2.writeScaled(brightness);
-                delay(15);
-            }
-            for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
-                pwm_servo_1.writeScaled(brightness);
-                pwm_servo_2.writeScaled(brightness);
-                delay(15);
+        if (!open_servo) {
+            if (open_servo_1) {
+                for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                    // Write a unit vector value from 0.0 to 1.0
+                    pwm_servo_1.writeScaled(brightness);
+                    pwm_servo_2.writeScaled(brightness);
+                    delay(15);
+                }
+                for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                    pwm_servo_1.writeScaled(brightness);
+                    pwm_servo_2.writeScaled(brightness);
+                    delay(15);
+                    open_servo_1 = true;
+                }
+                open_servo = true;
+            } else {
+                for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                    // Write a unit vector value from 0.0 to 1.0
+                    pwm_servo_1.writeScaled(brightness);
+                    delay(15);
+                }
+                for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                    pwm_servo_1.writeScaled(brightness);
+                    delay(15);
+                }
                 open_servo_1 = true;
             }
-        } else {
-            for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
-                // Write a unit vector value from 0.0 to 1.0
-                pwm_servo_1.writeScaled(brightness);
-                delay(15);
-            }
-            for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
-                pwm_servo_1.writeScaled(brightness);
-                delay(15);
-            }
-            open_servo_1 = true;
         }
+        // if (open_servo) {
+        //     pwm_servo_1.writeScaled(ANGLE(90));
+        //     pwm_servo_2.writeScaled(ANGLE(90));
+        // }
 
         // JY901.GetTime();
         // Serial.print("Time:20");
@@ -542,6 +548,18 @@ void loop() {
 
         // Serial.println("");
         // delay(500);
+
+        JY901.GetAngle();
+        Serial.print("Angle:");
+        Serial.print((float)JY901.stcAngle.Angle[0] / 32768 * 180);
+        Serial.print(" ");
+        Serial.print((float)JY901.stcAngle.Angle[1] / 32768 * 180);
+        Serial.print(" ");
+        Serial.print((float)JY901.stcAngle.Angle[2] / 32768 * 180);
+        Serial.println(" ");
+        pwm_servo_1.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[0] / 32768 * 180));
+        pwm_servo_2.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[1] / 32768 * 180));
+        delay(20);
     } else if (String(RunModeValue) == "Real-time Wireless Serial") {
         auto start = millis();
         // TODO: Real-time Wireless Serial

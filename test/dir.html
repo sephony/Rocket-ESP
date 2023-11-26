@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta charset="UTF-8">
+    <title>高度数据</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            color: #333333;
+            text-align: center;
+        }
+
+        ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        li {
+            padding: 12px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #dddddd;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .delete-btn {
+            float: right;
+            color: #ff0000;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>高度数据目录</h1>
+    <ul>
+        <li><a href='url[0]' style='color: #007bff; text-decoration: none; font-weight: bold;'>name[0]</a><span
+                class='delete-btn' onclick='deleteFile("url[0]")'>x</span></li>
+        <li><a href='url[1]' style='color: #007bff; text-decoration: none; font-weight: bold;'>name[1]</a><span
+                class='delete-btn' onclick='deleteFile("url[1]")'>x</span></li>
+        <li><a href='url[2]' style='color: #007bff; text-decoration: none; font-weight: bold;'>name[2]</a><span
+                class='delete-btn' onclick='deleteFile("url[2]")'>x</span></li>
+        <li><a href='url[3]' style='color: #007bff; text-decoration: none; font-weight: bold;'>name[3]</a><span
+                class='delete-btn' onclick='deleteFile("url[3]")'>x</span></li>
+        <li><a href='url[4]' style='color: #007bff; text-decoration: none; font-weight: bold;'>name[4]</a><span
+                class='delete-btn' onclick='deleteFile("url[4]")'>x</span></li>
+    </ul>
+    <p>前往<a href='/' style='color: #007bff; text-decoration: none; font-weight: bold;'>首页</a>。</p>
+    <script>
+        function deleteFile(url) {
+            if (confirm('确定要删除该文件吗？')) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/delete?file=' + url, true);
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        location.reload();
+                    }
+                };
+                xhr.send();
+            }
+        }
+    </script>
+</body>
+
+</html>

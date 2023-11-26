@@ -32,7 +32,7 @@ String lastLaunchReady;
 unsigned long lastReport;
 unsigned long lastMqttConnectionAttempt;
 
-bool Sign_Parachute = false;
+bool sign_parachute = false;
 bool sign_setTime = false;
 bool sign_beginNTPClient = false;
 bool sign_timeUpdate = false;

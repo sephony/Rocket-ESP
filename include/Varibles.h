@@ -38,7 +38,7 @@ extern String lastLaunchReady;
 extern unsigned long lastReport;
 extern unsigned long lastMqttConnectionAttempt;
 
-extern bool Sign_Parachute;
+extern bool sign_parachute;
 extern bool sign_setTime;
 extern bool sign_beginNTPClient;
 extern bool sign_timeUpdate;
