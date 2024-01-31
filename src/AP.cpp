@@ -216,7 +216,7 @@ void handleRoot() {
     s += "</ul>";
     s += "<p>前往<a href='config' style='color: #007bff; text-decoration: none; font-weight: bold;'>配置页面</a>调整参数。</p>";
     s += "<div class=\"sidebar\"><ul>";
-    s += "<li><a href=\"\">首页</a></li>";
+    s += "<li><a href='' style='color: #007bff; text-decoration: none; font-weight: bold;'>首页</a></li>";
     s += "<li><a href='dir' style='color: #007bff; text-decoration: none; font-weight: bold;'>高度数据</a></li>";
     s += "<li><a href='config' style='color: #007bff; text-decoration: none; font-weight: bold;'>配置</a></li>";
     s += "<li><a href='firmware' style='color: #007bff; text-decoration: none; font-weight: bold;'>固件更新</a></li><ul>";
