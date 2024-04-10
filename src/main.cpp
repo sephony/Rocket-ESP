@@ -45,26 +45,26 @@ void setup() {
     Serial.println("Program Started!");
 
     /** init gpio **/
-    pinMode(GPIO_FIRE, OUTPUT);
-    pinMode(GPIO_PARACHUTE, OUTPUT);
-    pinMode(GPIO_RGB, OUTPUT);
-    pinMode(GPIO_FIRE_SIGN, OUTPUT);
-    pinMode(GPIO_PARACHUTE_SIGN, OUTPUT);
-    pinMode(GPIO_RUN_SIGN, OUTPUT);
+    pinMode(pin_fire, OUTPUT);
+    pinMode(pin_parachute, OUTPUT);
+    pinMode(pin_RGB, OUTPUT);
+    pinMode(pin_run_sign, OUTPUT);
+    pinMode(pin_fire_sign, OUTPUT);
+    pinMode(pin_parachute_sign, OUTPUT);
 
-    digitalWrite(GPIO_FIRE, LOW);
-    digitalWrite(GPIO_PARACHUTE, LOW);
-    digitalWrite(GPIO_FIRE_SIGN, HIGH);
-    digitalWrite(GPIO_PARACHUTE_SIGN, HIGH);
-    digitalWrite(GPIO_RUN_SIGN, HIGH);
+    digitalWrite(pin_fire, LOW);
+    digitalWrite(pin_parachute, LOW);
+    digitalWrite(pin_fire_sign, HIGH);
+    digitalWrite(pin_parachute_sign, HIGH);
+    digitalWrite(pin_run_sign, HIGH);
 
     /* init EXTI */
-    pinMode(GPIO_EXTI, INPUT_PULLDOWN);
-    attachInterrupt(GPIO_EXTI, EXTI_Interrupt, FALLING);
+    pinMode(pin_EXTI, INPUT_PULLDOWN);
+    attachInterrupt(pin_EXTI, EXTI_Interrupt, FALLING);
     Serial.println("GPIO initalized!");
 
     /** init MS5611 **/
-    if (ms5611.begin(IIC_SDA, IIC_SCL)) {
+    if (ms5611.begin(pin_sda, pin_scl)) {
         Serial.print("MS5611 found! ID: ");
         Serial.println(ms5611.getDeviceID(), HEX);
     } else {
@@ -74,11 +74,12 @@ void setup() {
 
     for (int i = 0; i < 100; i++) {
         READ_5611(ms5611);
+        Serial.printf("real-time height is: %.4f m\n", height);
         altitude_sum += height;
         delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
     }
     H0 = altitude_sum / 100.0;
-    Serial.printf("Initial height is: %.4f m/r/n", H0);
+    Serial.printf("Initial height is: %.4f m\n", H0);
 
     // start communication with IMU
     // int status = IMU.begin();
@@ -89,22 +90,17 @@ void setup() {
     //     Serial.println(status);
     // }
     // Serial.println("ax,ay,az,gx,gy,gz,temp_C");
-    JY901.StartIIC(IIC_SDA, IIC_SCL);
+    // JY901.StartIIC(pin_sda, pin_scl);
 
     /** init servo **/
     ESP32PWM::allocateTimer(0);
     ESP32PWM::allocateTimer(1);
     ESP32PWM::allocateTimer(2);
     ESP32PWM::allocateTimer(3);
-    // myservo1.setPeriodHertz(50);
-    // myservo2.setPeriodHertz(50);
-    // myservo1.attach(GPIO_SERVO_1, 500, 2500);
-    // myservo2.attach(GPIO_SERVO_2, 500, 2500);
-    // myservo1.write(0);
-    // myservo2.write(0);
+
     pwm_para.attachPin(38, 50, 10);
-    pwm_servo_1.attachPin(47, 50, 10);
-    pwm_servo_2.attachPin(48, 50, 10);
+    pwm_servo_1.attachPin(pin_servo_1, 50, 10);
+    pwm_servo_2.attachPin(pin_servo_2, 50, 10);
     Serial.println("Servo initalized!");
 
     /** init FS **/
@@ -134,19 +130,22 @@ void setup() {
         Serial.println(file[0].c_str());
     }
     // 把files第1，2个'_'替换为'-'，第四个后面的'_'替换为':'，并按时间从小到大排序
+
     for (auto& file : files) {
-        file[0].replace(4, 1, "-");
-        file[0].replace(7, 1, "-");
-        file[0].replace(10, 1, " ");
-        file[0].replace(11, 1, " ");
-        file[0].replace(14, 1, ":");
+        if (std::count(file[0].begin(), file[0].end(), '_') >= 4) {
+            file[0].replace(4, 1, "-");
+            file[0].replace(7, 1, "-");
+            file[0].replace(10, 1, " ");
+            file[0].replace(11, 1, " ");
+            file[0].replace(14, 1, ":");
+        } else
+            Serial.println("Error: file name format error!");
     }
 
     std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
         return a[0] < b[0];
     });
     Serial.println("SPIFFS dir list:");
-
     group_mode.addItem(&RunMode_Param);
     group_mode.addItem(&ParaMode_Param);
     group_mode.addItem(&LaunchReadyParam);
@@ -227,7 +226,7 @@ void loop() {
     iotWebConf.doLoop();
     // server.handleClient();
 
-    if (sign_needReset || !digitalRead(GPIO_KEY_AP)) {
+    if (sign_needReset || !digitalRead(pin_key_ap)) {
         Serial.println("Rebooting after 1 second.");
         delay(1000);
         ESP.restart();
@@ -262,7 +261,7 @@ void loop() {
         }
 
         static File file;
-        file = SPIFFS.open(fileName, FILE_WRITE);
+        file = SPIFFS.open(fileName, FILE_APPEND);
 
         static auto t_start = millis();
 
@@ -310,26 +309,26 @@ void loop() {
         }
         switch (mission_stage) {
         case STAND_BY:
-            neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
+            neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
             if (String(LaunchReadyValue) == "selected") {
                 mission_stage = PRE_LAUNCH;
-                digitalWrite(GPIO_RUN_SIGN, HIGH);
+                digitalWrite(pin_run_sign, HIGH);
                 Serial.println("Mission start!");
             }
             break;
 
         case PRE_LAUNCH:
-            neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, 0);
+            neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, 0);
             break;
 
         case LAUNCHED:
-            neopixelWrite(GPIO_RGB, rgbBrightness, 0, 0);
+            neopixelWrite(pin_RGB, rgbBrightness, 0, 0);
             // record height
             appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
             if ((millis() - time_launch) > T_detach * 1000) {
-                digitalWrite(GPIO_FIRE, HIGH);
-                digitalWrite(GPIO_FIRE_SIGN, LOW);
+                digitalWrite(pin_fire, HIGH);
+                digitalWrite(pin_fire_sign, LOW);
                 mission_stage = DETACHED;
                 // timerAlarmDisable(timer);
                 Serial.println("Detached!");
@@ -339,13 +338,13 @@ void loop() {
             break;
 
         case DETACHED:
-            neopixelWrite(GPIO_RGB, 0, rgbBrightness, 0);
+            neopixelWrite(pin_RGB, 0, rgbBrightness, 0);
             // record height
             appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
 
             if ((millis() - time_launch) > (T_detach + DELTA_T_DETACH) * 1000) {
-                digitalWrite(GPIO_FIRE, LOW);
+                digitalWrite(pin_fire, LOW);
             }
             if (String(ParaModeValue) == "height control") {
                 Serial.println("height control!");
@@ -354,7 +353,7 @@ void loop() {
                     sign_parachute = true;
                     time_para = millis();
                     pwm_para.writeScaled(0.125);
-                    digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
+                    digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Height Parachute on!\r\n");
                     appendFile(file, "Height Parachute on!\r\n");
@@ -363,7 +362,7 @@ void loop() {
                     Serial.println("time para!");
                     time_para = millis();
                     pwm_para.writeScaled(0.125);
-                    digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
+                    digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
                     appendFile(file, "Time Protect Parachute on!\r\n");
@@ -373,7 +372,7 @@ void loop() {
                 if ((millis() - time_launch) > (T_para * 1000)) {
                     time_para = millis();
                     pwm_para.writeScaled(0.125);
-                    digitalWrite(GPIO_PARACHUTE_SIGN, LOW);
+                    digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
                     appendFile(file, "Time Parachute on!\r\n");
@@ -382,7 +381,7 @@ void loop() {
             break;
 
         case PRELAND:
-            neopixelWrite(GPIO_RGB, 0, 0, rgbBrightness);
+            neopixelWrite(pin_RGB, 0, 0, rgbBrightness);
             appendFile(file, InformationToPrint);
             // Serial.println(InformationToPrint);
             if (height_filter < HEIGHT_LAND) {
@@ -393,12 +392,12 @@ void loop() {
             break;
 
         case LANDED:
-            neopixelWrite(GPIO_RGB, rgbBrightness, 0, rgbBrightness);
+            neopixelWrite(pin_RGB, rgbBrightness, 0, rgbBrightness);
             appendFile(file, "Landed!\r\n");
             appendFile(file, "\n\n\n\n");
-            digitalWrite(GPIO_FIRE_SIGN, HIGH);
-            digitalWrite(GPIO_PARACHUTE_SIGN, HIGH);
-            digitalWrite(GPIO_RUN_SIGN, HIGH);
+            digitalWrite(pin_fire_sign, HIGH);
+            digitalWrite(pin_parachute_sign, HIGH);
+            digitalWrite(pin_run_sign, HIGH);
             file.close();
             mission_stage = STAND_BY;
             // sign_initServo = false;
@@ -430,16 +429,32 @@ void loop() {
         // TODO: Debug
         static bool open_servo_1 = false;
         static bool open_servo = false;
-        neopixelWrite(GPIO_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
+        neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
+
+        // for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+        //     // Write a unit vector value from 0.0 to 1.0
+        //     pwm_servo_1.writeScaled(brightness);
+        //     pwm_servo_2.writeScaled(brightness);
+        //     delay(15);
+        // }
+        // for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+        //     pwm_servo_1.writeScaled(brightness);
+        //     pwm_servo_2.writeScaled(brightness);
+        //     delay(15);
+        //     open_servo_1 = true;
+        // }
+
         if (!open_servo) {
             if (open_servo_1) {
                 for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
                     // Write a unit vector value from 0.0 to 1.0
                     pwm_servo_1.writeScaled(brightness);
+                    Serial.println(brightness);
                     pwm_servo_2.writeScaled(brightness);
                     delay(15);
                 }
                 for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                    Serial.println(brightness);
                     pwm_servo_1.writeScaled(brightness);
                     pwm_servo_2.writeScaled(brightness);
                     delay(15);
@@ -459,6 +474,7 @@ void loop() {
                 open_servo_1 = true;
             }
         }
+
         // if (open_servo) {
         //     pwm_servo_1.writeScaled(ANGLE(90));
         //     pwm_servo_2.writeScaled(ANGLE(90));
@@ -549,17 +565,17 @@ void loop() {
         // Serial.println("");
         // delay(500);
 
-        JY901.GetAngle();
-        Serial.print("Angle:");
-        Serial.print((float)JY901.stcAngle.Angle[0] / 32768 * 180);
-        Serial.print(" ");
-        Serial.print((float)JY901.stcAngle.Angle[1] / 32768 * 180);
-        Serial.print(" ");
-        Serial.print((float)JY901.stcAngle.Angle[2] / 32768 * 180);
-        Serial.println(" ");
-        pwm_servo_1.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[0] / 32768 * 180));
-        pwm_servo_2.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[1] / 32768 * 180));
-        delay(20);
+        // JY901.GetAngle();
+        // Serial.print("Angle:");
+        // Serial.print((float)JY901.stcAngle.Angle[0] / 32768 * 180);
+        // Serial.print(" ");
+        // Serial.print((float)JY901.stcAngle.Angle[1] / 32768 * 180);
+        // Serial.print(" ");
+        // Serial.print((float)JY901.stcAngle.Angle[2] / 32768 * 180);
+        // Serial.println(" ");
+        // pwm_servo_1.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[0] / 32768 * 180));
+        // pwm_servo_2.writeScaled(ANGLE(90 + 3 * (float)JY901.stcAngle.Angle[1] / 32768 * 180));
+        // delay(20);
     } else if (String(RunModeValue) == "Real-time Wireless Serial") {
         auto start = millis();
         // TODO: Real-time Wireless Serial
@@ -573,11 +589,11 @@ void loop() {
         if (WiFi.status() != WL_CONNECTED) {
             Serial.println("Connecting to WiFi..");
             delay(1000);
-            neopixelWrite(GPIO_RGB, 0, 0, rgbBrightness);
+            neopixelWrite(pin_RGB, 0, 0, rgbBrightness);
         } else {
             // 如果没有连接到服务器
             if (!client.connected()) {  // Serial.println("1");
-                neopixelWrite(GPIO_RGB, rgbBrightness, 0, 0);
+                neopixelWrite(pin_RGB, rgbBrightness, 0, 0);
                 Serial.println("Waiting for reconnection with server.");
                 client.stop();
                 delay(1);
@@ -588,7 +604,7 @@ void loop() {
                     wifiClientRequest(rx_data);  // 向客户端发送数据
                 }
             } else {
-                neopixelWrite(GPIO_RGB, 0, rgbBrightness, 0);
+                neopixelWrite(pin_RGB, 0, rgbBrightness, 0);
                 // Tcp_Handler(Read_Tcp());
                 // Serial_callback();
                 wifiClientRequest(rx_data);  // 向客户端发送数据
