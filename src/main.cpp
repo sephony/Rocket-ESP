@@ -127,8 +127,8 @@ void setup() {
     for (auto file : files) {
         Serial.println(file[0].c_str());
     }
-    // 把files第1，2个'_'替换为'-'，第四个后面的'_'替换为':'，并按时间从小到大排序
 
+    // 把files第1，2个'_'替换为'-'，第四个后面的'_'替换为':'，并按时间从小到大排序
     for (auto& file : files) {
         if (std::count(file[0].begin(), file[0].end(), '_') >= 4) {
             file[0].replace(4, 1, "-");
@@ -137,12 +137,13 @@ void setup() {
             file[0].replace(11, 1, " ");
             file[0].replace(14, 1, ":");
         } else
-            Serial.println("Error: file name format error!");
+            Serial.printf("Error: file name %s format error!", file[0].c_str());
     }
 
     std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
         return a[0] < b[0];
     });
+
     Serial.println("SPIFFS dir list:");
     group_mode.addItem(&RunMode_Param);
     group_mode.addItem(&ParaMode_Param);
