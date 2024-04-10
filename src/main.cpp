@@ -300,9 +300,9 @@ void loop() {
         strcat(InformationToPrint, "\r\n");
 
         if (!sign_initServo) {
-            pwm_para.writeScaled(0.025);
-            pwm_servo_1.writeScaled(0.025);
-            pwm_servo_2.writeScaled(0.025);
+            pwm_para.writeScaled(ANGLE(0));
+            pwm_servo_1.writeScaled(ANGLE(0));
+            pwm_servo_2.writeScaled(ANGLE(0));
             sign_initServo = true;
             Serial.println("Servo initalized!");
         }
@@ -351,7 +351,7 @@ void loop() {
                     Serial.println("height para!");
                     sign_parachute = true;
                     time_para = millis();
-                    pwm_para.writeScaled(0.125);
+                    pwm_para.writeScaled(ANGLE(180));
                     digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Height Parachute on!\r\n");
@@ -360,7 +360,7 @@ void loop() {
                 if (((millis() - time_launch) > (T_protectPara * 1000)) && (sign_parachute == false)) {
                     Serial.println("time para!");
                     time_para = millis();
-                    pwm_para.writeScaled(0.125);
+                    pwm_para.writeScaled(ANGLE(180));
                     digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
@@ -370,7 +370,7 @@ void loop() {
                 Serial.println("time control!");
                 if ((millis() - time_launch) > (T_para * 1000)) {
                     time_para = millis();
-                    pwm_para.writeScaled(0.125);
+                    pwm_para.writeScaled(ANGLE(180));
                     digitalWrite(pin_parachute_sign, LOW);
                     mission_stage = PRELAND;
                     Serial.printf("Time Parachute on!\r\n");
@@ -430,29 +430,29 @@ void loop() {
         static bool open_servo = false;
         neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
 
-        // for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
-        //     // Write a unit vector value from 0.0 to 1.0
-        //     pwm_servo_1.writeScaled(brightness);
-        //     pwm_servo_2.writeScaled(brightness);
-        //     delay(15);
-        // }
-        // for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
-        //     pwm_servo_1.writeScaled(brightness);
-        //     pwm_servo_2.writeScaled(brightness);
-        //     delay(15);
-        //     open_servo_1 = true;
-        // }
+        // 舵机一直来回转
+        //  for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
+        //      pwm_servo_1.writeScaled(brightness);
+        //      pwm_servo_2.writeScaled(brightness);
+        //      delay(15);
+        //  }
+        //  for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
+        //      pwm_servo_1.writeScaled(brightness);
+        //      pwm_servo_2.writeScaled(brightness);
+        //      delay(15);
+        //  }
 
+        // 舵机来回转一次
         if (!open_servo) {
             if (open_servo_1) {
-                for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
                     // Write a unit vector value from 0.0 to 1.0
                     pwm_servo_1.writeScaled(brightness);
                     Serial.println(brightness);
                     pwm_servo_2.writeScaled(brightness);
                     delay(15);
                 }
-                for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
                     Serial.println(brightness);
                     pwm_servo_1.writeScaled(brightness);
                     pwm_servo_2.writeScaled(brightness);
@@ -461,23 +461,18 @@ void loop() {
                 }
                 open_servo = true;
             } else {
-                for (float brightness = 0.025; brightness <= 0.125; brightness += 0.001) {
+                for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
                     // Write a unit vector value from 0.0 to 1.0
                     pwm_servo_1.writeScaled(brightness);
                     delay(15);
                 }
-                for (float brightness = 0.125; brightness >= 0.025; brightness -= 0.001) {
+                for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
                     pwm_servo_1.writeScaled(brightness);
                     delay(15);
                 }
                 open_servo_1 = true;
             }
         }
-
-        // if (open_servo) {
-        //     pwm_servo_1.writeScaled(ANGLE(90));
-        //     pwm_servo_2.writeScaled(ANGLE(90));
-        // }
 
     } else if (String(RunModeValue) == "Real-time Wireless Serial") {
         auto start = millis();
