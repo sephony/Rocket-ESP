@@ -37,5 +37,4 @@ bool sign_setTime = false;
 bool sign_beginNTPClient = false;
 bool sign_timeUpdate = false;
 bool sign_needReset = false;
-bool sign_initServo = false;
 bool sign_needMqttConnect = false;

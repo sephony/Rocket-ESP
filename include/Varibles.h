@@ -43,7 +43,6 @@ extern bool sign_setTime;
 extern bool sign_beginNTPClient;
 extern bool sign_timeUpdate;
 extern bool sign_needReset;
-extern bool sign_initServo;
 extern bool sign_needMqttConnect;
 
 // extern char temp[20];

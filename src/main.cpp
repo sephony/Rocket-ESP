@@ -1,29 +1,27 @@
-#include "main.h"
-
 #include <Arduino.h>
-#include <ESP32Servo.h>
 
+// FS
+#include <FS.h>
+#include <SPIFFS.h>
+
+// Peripheral
+#include <ESP32Servo.h>
+#include <ICM42688.h>
+#include <MS5611.h>
+
+// basic
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+// User header
 #include "AP.h"
 #include "Filter.h"
 #include "PinConfig.h"
 #include "RocketClient.h"
 #include "UserFunction.h"
 #include "Varibles.h"
-
-// FS
-#include <FS.h>
-#include <SPIFFS.h>
-
-// Sensors
-#include <ICM42688.h>
-#include <MS5611.h>
-#include <Wire.h>
-
-// basic
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include "main.h"
 
 /***** State Machine Definition *****/
 mission_stage_t mission_stage;
@@ -41,7 +39,7 @@ ESP32PWM pwm_servo_2;
 /***** Initialization Fuction Definition *****/
 void setup() {
     Serial.begin(115200);
-    Serial.println("Program Started!");
+    Serial.println("****************** INITIALIZATION START ******************");
 
     /** init gpio **/
     pinMode(pin_fire, OUTPUT);
@@ -73,14 +71,25 @@ void setup() {
 
     for (int i = 0; i < 100; i++) {
         READ_5611(ms5611);
-        Serial.printf("real-time height is: %.4f m\n", height);
         altitude_sum += height;
         delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
     }
     H0 = altitude_sum / 100.0;
-    Serial.printf("Initial height is: %.4f m\n", H0);
+    Serial.printf("MS5611 initalized!");
+    Serial.printf("The initial height is: %.4f m\n", H0);
 
-    // start communication with IMU
+    // auto start = millis();
+    // ms5611.read();
+    // auto stop = millis();
+    // Serial.print("Temperature: ");
+    // Serial.print(ms5611.getTemperature(), 2);
+    // Serial.print(" C, Pressure: ");
+    // Serial.print(ms5611.getPressure(), 2);
+    // Serial.print(" mBar, Duration: ");
+    // Serial.print(stop - start);
+    // Serial.println(" ms");
+
+    /** init IMU42688 **/
     // int status = IMU.begin();
     // if (status < 0) {
     //     Serial.println("IMU initialization unsuccessful");
@@ -89,6 +98,7 @@ void setup() {
     //     Serial.println(status);
     // }
     // Serial.println("ax,ay,az,gx,gy,gz,temp_C");
+    // Serial.println("IMU42688 initalized!");
 
     /** init servo **/
     ESP32PWM::allocateTimer(0);
@@ -106,7 +116,7 @@ void setup() {
         Serial.println("SPIFFS mount failed!");
     }
     SPIFFS.mkdir("/data");
-    // SPIFFS.format();
+    // SPIFFS.format();//格式化文件系统，仅在清除飞行记录时使用
     Serial.println("SPIFFS mounted!");
     Serial.printf("SPIFFS total memory: %d (Byte)\n", SPIFFS.totalBytes());
     Serial.printf("SPIFFS used memory: %d (Byte)\n", SPIFFS.usedBytes());
@@ -140,11 +150,11 @@ void setup() {
             Serial.printf("Error: file name %s format error!", file[0].c_str());
     }
 
+    Serial.println("SPIFFS dir list:");
     std::sort(files.begin(), files.end(), [](const std::array<std::string, 2>& a, const std::array<std::string, 2>& b) {
         return a[0] < b[0];
     });
 
-    Serial.println("SPIFFS dir list:");
     group_mode.addItem(&RunMode_Param);
     group_mode.addItem(&ParaMode_Param);
     group_mode.addItem(&LaunchReadyParam);
@@ -196,8 +206,8 @@ void setup() {
     mqttClient.onMessage(mqttMessageReceived);
 
     Serial.println("HTTP server started");
-    Serial.println("initialize done!");
 
+    // 读取存储在flash中的配置参数
     T_detach = atof(T_DetachValue);
     T_para = atof(T_ParaValue);
     H_para = atof(H_ParaValue);
@@ -208,22 +218,13 @@ void setup() {
     lastParaMode = (String)ParaModeValue;
     lastLaunchReady = (String)LaunchReadyValue;
 
-    auto start = millis();
-    ms5611.read();
-    auto stop = millis();
-    Serial.print("Temperature: ");
-    Serial.print(ms5611.getTemperature(), 2);
-    Serial.print(" C, Pressure: ");
-    Serial.print(ms5611.getPressure(), 2);
-    Serial.print(" mBar, Duration: ");
-    Serial.print(stop - start);
-    Serial.println(" ms");
+    Serial.println("****************** INITIALIZATION DONE ******************");
 }
 
 /***** Loop Function Definition *****/
 void loop() {
     iotWebConf.doLoop();
-    // server.handleClient();
+    // server.handleClient(); //好像iotWebConf.doLoop函数会调用这个，所以不需要
 
     if (sign_needReset || !digitalRead(pin_key_ap)) {
         Serial.println("Rebooting after 1 second.");
@@ -299,13 +300,6 @@ void loop() {
         strcat(InformationToPrint, "\t ");
         strcat(InformationToPrint, "\r\n");
 
-        if (!sign_initServo) {
-            pwm_para.writeScaled(ANGLE(0));
-            pwm_servo_1.writeScaled(ANGLE(0));
-            pwm_servo_2.writeScaled(ANGLE(0));
-            sign_initServo = true;
-            Serial.println("Servo initalized!");
-        }
         switch (mission_stage) {
         case STAND_BY:
             neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
@@ -329,11 +323,9 @@ void loop() {
                 digitalWrite(pin_fire, HIGH);
                 digitalWrite(pin_fire_sign, LOW);
                 mission_stage = DETACHED;
-                // timerAlarmDisable(timer);
                 Serial.println("Detached!");
                 appendFile(file, "Detached!\r\n");
             }
-
             break;
 
         case DETACHED:
@@ -431,43 +423,43 @@ void loop() {
         neopixelWrite(pin_RGB, rgbBrightness, rgbBrightness, rgbBrightness);
 
         // 舵机一直来回转
-        //  for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
-        //      pwm_servo_1.writeScaled(brightness);
-        //      pwm_servo_2.writeScaled(brightness);
+        //  for (float angle = ANGLE(0); angle <= ANGLE(180); angle += 0.001) {
+        //      pwm_servo_1.writeScaled(angle);
+        //      pwm_servo_2.writeScaled(angle);
         //      delay(15);
         //  }
-        //  for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
-        //      pwm_servo_1.writeScaled(brightness);
-        //      pwm_servo_2.writeScaled(brightness);
+        //  for (float angle = ANGLE(180); angle >= ANGLE(0); angle -= 0.001) {
+        //      pwm_servo_1.writeScaled(angle);
+        //      pwm_servo_2.writeScaled(angle);
         //      delay(15);
         //  }
 
-        // 舵机来回转一次
+        // 舵机来回只转一次
         if (!open_servo) {
             if (open_servo_1) {
-                for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
+                for (float angle = ANGLE(0); angle <= ANGLE(180); angle += 0.001) {
                     // Write a unit vector value from 0.0 to 1.0
-                    pwm_servo_1.writeScaled(brightness);
-                    Serial.println(brightness);
-                    pwm_servo_2.writeScaled(brightness);
+                    pwm_servo_1.writeScaled(angle);
+                    Serial.println(angle);
+                    pwm_servo_2.writeScaled(angle);
                     delay(15);
                 }
-                for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
-                    Serial.println(brightness);
-                    pwm_servo_1.writeScaled(brightness);
-                    pwm_servo_2.writeScaled(brightness);
+                for (float angle = ANGLE(180); angle >= ANGLE(0); angle -= 0.001) {
+                    Serial.println(angle);
+                    pwm_servo_1.writeScaled(angle);
+                    pwm_servo_2.writeScaled(angle);
                     delay(15);
                     open_servo_1 = true;
                 }
                 open_servo = true;
             } else {
-                for (float brightness = ANGLE(0); brightness <= ANGLE(180); brightness += 0.001) {
+                for (float angle = ANGLE(0); angle <= ANGLE(180); angle += 0.001) {
                     // Write a unit vector value from 0.0 to 1.0
-                    pwm_servo_1.writeScaled(brightness);
+                    pwm_servo_1.writeScaled(angle);
                     delay(15);
                 }
-                for (float brightness = ANGLE(180); brightness >= ANGLE(0); brightness -= 0.001) {
-                    pwm_servo_1.writeScaled(brightness);
+                for (float angle = ANGLE(180); angle >= ANGLE(0); angle -= 0.001) {
+                    pwm_servo_1.writeScaled(angle);
                     delay(15);
                 }
                 open_servo_1 = true;
