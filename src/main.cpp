@@ -69,25 +69,27 @@ void setup() {
     }
     float altitude_sum = 0;
 
+    ms5611.setOversampling(OSR_STANDARD);
     for (int i = 0; i < 100; i++) {
         READ_5611(ms5611);
         altitude_sum += height;
         delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
     }
     H0 = altitude_sum / 100.0;
+    ms5611.list();
     Serial.printf("MS5611 initalized!");
     Serial.printf("The initial height is: %.4f m\n", H0);
 
-    // auto start = millis();
-    // ms5611.read();
-    // auto stop = millis();
-    // Serial.print("Temperature: ");
-    // Serial.print(ms5611.getTemperature(), 2);
-    // Serial.print(" C, Pressure: ");
-    // Serial.print(ms5611.getPressure(), 2);
-    // Serial.print(" mBar, Duration: ");
-    // Serial.print(stop - start);
-    // Serial.println(" ms");
+    auto start = millis();
+    ms5611.read();
+    auto stop = millis();
+    Serial.print("Temperature: ");
+    Serial.print(ms5611.getTemperature(), 2);
+    Serial.print(" C, Pressure: ");
+    Serial.print(ms5611.getPressure(), 2);
+    Serial.print(" mBar, Duration: ");
+    Serial.print(stop - start);
+    Serial.println(" ms");
 
     /** init IMU42688 **/
     // int status = IMU.begin();
@@ -132,7 +134,10 @@ void setup() {
         }
         file_temp = root.openNextFile();
     }
-
+    // 根据文件名输出文件内容
+    // String fileName = "2023_10_05__23_45.txt";
+    // File file = SPIFFS.open("/data/" + fileName, FILE_READ);
+    // outputFile(file);
     Serial.println("SPIFFS file list:");
     for (auto file : files) {
         Serial.println(file[0].c_str());

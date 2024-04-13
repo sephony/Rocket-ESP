@@ -19,7 +19,7 @@ float getHeight(MS5611 ms5611) {
     // float height = (pow((1013.25 / getPressure()), 1.0 / 5.257) - 1) * (getTemperature() + 273.15) / 0.65;  // hypsometric
     return height;
 }
-void READ_5611(MS5611 ms5611) {
+void READ_5611(MS5611& ms5611) {
     if ((ms5611.read()) != MS5611_READ_OK) {
         Serial.print("Error in read: ");
     } else {
@@ -27,6 +27,7 @@ void READ_5611(MS5611 ms5611) {
         height = getHeight(ms5611);
         AltitudeLPF_50.input = height;
         height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
+        // 二次滤波
         // AltitudeLPF_50.input = height_filter;
         // height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
     }
@@ -45,6 +46,17 @@ void appendFile(File file, const char* message) {
 }
 void appendFile(File file, String message) {
     appendFile(file, message.c_str());
+}
+
+void outputFile(File file) {
+    Serial.printf("Output file: %s\r\n", file.path());
+    if (!file) {
+        Serial.println("- failed to open file for reading");
+    }
+    while (file.available()) {
+        Serial.write(file.read());
+    }
+    file.close();
 }
 String getContentType(String filename) {
     if (server.hasArg("download")) {

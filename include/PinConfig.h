@@ -6,11 +6,11 @@
 #define GPIO_F1 4  // 点火
 #define GPIO_F2 5  // 开伞
 #define GPIO_F3 6  // 舵机
-// #define GPIO_S1 47  // 舵机1
-// #define GPIO_S2 48  // 舵机2
+#define GPIO_S1 47  // 舵机1
+#define GPIO_S2 48  // 舵机2
 
-#define GPIO_S1 2  // 舵机1
-#define GPIO_S2 6  // 舵机2
+// #define GPIO_S1 2  // 舵机1
+// #define GPIO_S2 6  // 舵机2
 
 #define GPIO_F1_SIGN 15  // 点火指示灯
 #define GPIO_F2_SIGN 16  // 开伞指示灯
