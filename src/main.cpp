@@ -27,7 +27,8 @@
 mission_stage_t mission_stage;
 
 /***** Class Definition *****/
-MS5611 ms5611(0x77);  // ESP32 HW SPI
+MS5611_IIC ms5611_iic(pin_sda, pin_scl);  // ESP32 IIC
+MS5611 ms5611(ms5611_iic);
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
 // SPIClass SPI_IMU(FSPI);
 // ICM42688 IMU(SPI_IMU, ICM42688_CS);
@@ -61,7 +62,7 @@ void setup() {
     Serial.println("GPIO initalized!");
 
     /** init MS5611 **/
-    if (ms5611.begin(pin_sda, pin_scl)) {
+    if (ms5611.begin()) {
         Serial.print("MS5611 found! ID: ");
         Serial.println(ms5611.getDeviceID(), HEX);
     } else {
