@@ -14,17 +14,12 @@ void EXTI_Interrupt(void) {
     }
 }
 
-float getHeight(MS5611 ms5611) {
-    float height = 44330.0 * (1.0 - pow(ms5611.getPressure() / 1013.25, 1 / 5.255));  // barometric
-    // float height = (pow((1013.25 / getPressure()), 1.0 / 5.257) - 1) * (getTemperature() + 273.15) / 0.65;  // hypsometric
-    return height;
-}
 void READ_5611(MS5611& ms5611) {
     if ((ms5611.read()) != MS5611_READ_OK) {
         Serial.print("Error in read: ");
     } else {
         // Serial.printf("Preassure: %.2f\r\n", MS5611.getPressure());
-        height = getHeight(ms5611);
+        height = ms5611.getHeight();
         AltitudeLPF_50.input = height;
         height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
         // 二次滤波
@@ -58,7 +53,7 @@ void outputFile(File file) {
     }
     file.close();
 }
-String getContentType(String filename) {
+String getFileType(String filename) {
     if (server.hasArg("download")) {
         return "application/octet-stream";
     } else if (filename.endsWith(".htm")) {
@@ -101,14 +96,14 @@ bool handleFileRead(String path) {
     if (path.endsWith("/")) {
         path += "index.htm";
     }
-    String contentType = getContentType(path);
+    String fileType = getFileType(path);
     String pathWithGz = path + ".gz";
     if (exists(pathWithGz) || exists(path)) {
         if (exists(pathWithGz)) {
             path += ".gz";
         }
         File file = SPIFFS.open(path, "r");
-        server.streamFile(file, contentType);
+        server.streamFile(file, fileType);
         file.close();
         return true;
     }

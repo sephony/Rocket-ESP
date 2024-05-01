@@ -1,9 +1,9 @@
 #ifndef ROCKET_CLIENT_H_
 #define ROCKET_CLIENT_H_
 
-#include <WiFiClient.h>
+#include <WiFi.h>
 
-#include "AP.h"
+// #include "AP.h"
 
 extern WiFiClient client;
 

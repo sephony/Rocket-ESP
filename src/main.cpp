@@ -2,6 +2,7 @@
 
 // FS
 #include <FS.h>
+// #include <LittleFS.h>
 #include <SPIFFS.h>
 
 // Peripheral
@@ -29,6 +30,9 @@ mission_stage_t mission_stage;
 /***** Class Definition *****/
 MS5611_IIC ms5611_iic(pin_sda, pin_scl);  // ESP32 IIC
 MS5611 ms5611(ms5611_iic);
+// MS5611_SPI ms5611_spi(pin_sck, pin_miso, pin_mosi, MS5611_CS);  // ESP32 SPI
+// MS5611 ms5611(ms5611_spi);
+
 // an ICM42688 object with the ICM42688 sensor on SPI bus 0 and chip select pin 10
 // SPIClass SPI_IMU(FSPI);
 // ICM42688 IMU(SPI_IMU, ICM42688_CS);
@@ -112,6 +116,8 @@ void setup() {
     pwm_para.attachPin(38, 50, 10);
     pwm_servo_1.attachPin(pin_servo_1, 50, 10);
     pwm_servo_2.attachPin(pin_servo_2, 50, 10);
+    pwm_servo_1.writeScaled(ANGLE(0));
+    pwm_servo_2.writeScaled(ANGLE(0));
     Serial.println("Servo initalized!");
 
     /** init FS **/
@@ -135,6 +141,7 @@ void setup() {
         }
         file_temp = root.openNextFile();
     }
+
     // 根据文件名输出文件内容
     // String fileName = "2023_10_05__23_45.txt";
     // File file = SPIFFS.open("/data/" + fileName, FILE_READ);
