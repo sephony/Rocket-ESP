@@ -256,6 +256,7 @@ void handleDir() {
     s += "</ul>";
     s += "<p>前往<a href='/' style='color: #007bff; text-decoration: none; font-weight: bold;'>首页</a>。</p>";
     s += "</body></html>\n";
+    // server.send(200, "text/html", html_to_string("/data/Rocket.html"));
     server.send(200, "text/html", s);
 }
 void wifiConnected() {

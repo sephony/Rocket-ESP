@@ -11,13 +11,11 @@
 #include <MS5611.h>
 
 // basic
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 // User header
 #include "AP.h"
-#include "Filter.h"
 #include "PinConfig.h"
 #include "RocketClient.h"
 #include "UserFunction.h"
@@ -69,19 +67,21 @@ void setup() {
     if (ms5611.begin()) {
         Serial.print("MS5611 found! ID: ");
         Serial.println(ms5611.getDeviceID(), HEX);
+        // ms5611.list();
     } else {
         Serial.println("MS5611 not found.");
     }
     float altitude_sum = 0;
 
     ms5611.setOversampling(OSR_STANDARD);
-    for (int i = 0; i < 100; i++) {
-        READ_5611(ms5611);
-        altitude_sum += height;
-        delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
-    }
-    H0 = altitude_sum / 100.0;
-    ms5611.list();
+    // for (int i = 0; i < 100; i++) {
+    //     READ_5611(ms5611);
+    //     altitude_sum += height;
+    //     delay(30);  // 经验数据,不要改(标准模式下执行一次main循环需要74ms)
+    // }
+    // H0 = altitude_sum / 100.0;
+    ms5611.init(30, 100, ONLY_PRESSURE);
+    H0 = ms5611.getInit("H0");
     Serial.printf("MS5611 initalized!");
     Serial.printf("The initial height is: %.4f m\n", H0);
 
@@ -295,9 +295,13 @@ void loop() {
         // Serial.print("\t");
         // Serial.println(IMU.temp(), 6);
         // delay(100);
-        READ_5611(ms5611);
-        height -= H0;
-        height_filter -= H0;
+
+        // READ_5611(ms5611);
+        // height -= H0;
+        // height_filter -= H0;
+        ms5611.read();
+        height = ms5611.getHeight(ONLY_PRESSURE) - H0;
+        height_filter = ms5611.getRelativeHeight(ONLY_PRESSURE);
 
         current_time = (millis() - time_launch) / 1000.0;
         sprintf(str_time, "%.4f", current_time);
@@ -483,10 +487,13 @@ void loop() {
         auto start = millis();
         // TODO: Real-time Wireless Serial
         // Serial.println("Real-time Wireless Serial");
-        READ_5611(ms5611);
-        delay(30);
-        height -= H0;
-        height_filter -= H0;
+        // READ_5611(ms5611);
+        // height -= H0;
+        // height_filter -= H0;
+        ms5611.read();
+        height = ms5611.getHeight(ONLY_PRESSURE) - H0;
+        height_filter = ms5611.getRelativeHeight(ONLY_PRESSURE);
+
         rx_data = String(height) + ',' + String(height_filter);
         Serial.println(height_filter);
         if (WiFi.status() != WL_CONNECTED) {

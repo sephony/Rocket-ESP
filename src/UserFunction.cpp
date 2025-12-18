@@ -4,7 +4,7 @@
 #include "Varibles.h"
 
 /***** Interrupt Function Definition *****/
-void EXTI_Interrupt(void) {
+void EXTI_Interrupt() {
     if (mission_stage == PRE_LAUNCH) {
         time_launch = millis();  // 单位ms
         digitalWrite(GPIO_RUN_SIGN, LOW);
@@ -14,21 +14,21 @@ void EXTI_Interrupt(void) {
     }
 }
 
-void READ_5611(MS5611& ms5611) {
-    if ((ms5611.read()) != MS5611_READ_OK) {
-        Serial.print("Error in read: ");
-    } else {
-        // Serial.printf("Preassure: %.2f\r\n", MS5611.getPressure());
-        height = ms5611.getHeight();
-        AltitudeLPF_50.input = height;
-        height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
-        // 二次滤波
-        // AltitudeLPF_50.input = height_filter;
-        // height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
-    }
-}
+// void READ_5611(MS5611& ms5611) {
+//     if ((ms5611.read()) != MS5611_READ_OK) {
+//         Serial.print("Error in read: ");
+//     } else {
+//         // Serial.printf("Preassure: %.2f\r\n", MS5611.getPressure());
+//         height = ms5611.getHeight();
+//         AltitudeLPF_50.input = height;
+//         height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
+//         // 二次滤波
+//         // AltitudeLPF_50.input = height_filter;
+//         // height_filter = Butterworth50HzLPF(&AltitudeLPF_50);
+//     }
+// }
 
-void appendFile(File file, const char* message) {
+void appendFile(File& file, const char* message) {
     Serial.printf("Appending to file: %s\r\n", file.path());
     if (!file) {
         Serial.println("- failed to open file for appending");
@@ -39,11 +39,11 @@ void appendFile(File file, const char* message) {
         Serial.println("- append failed!");
     }
 }
-void appendFile(File file, String message) {
+void appendFile(File& file, const String& message) {
     appendFile(file, message.c_str());
 }
 
-void outputFile(File file) {
+void outputFile(File& file) {
     Serial.printf("Output file: %s\r\n", file.path());
     if (!file) {
         Serial.println("- failed to open file for reading");
@@ -110,23 +110,16 @@ bool handleFileRead(String path) {
     return false;
 }
 
-std::string html_to_string(const std::string& file_path) {
-    std::ifstream file(file_path);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << file_path << std::endl;
-        return "";
+String html_to_string(const std::string& file_path) {
+    std::string html_string = "";
+    File file = SPIFFS.open(file_path.c_str(), "r");
+    if (!file) {
+        Serial.printf("Failed to open file: %s\r\n", file_path.c_str());
+        return String("Failed to open file: " + String(file_path.c_str()));
     }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string html_string = buffer.str();
-
-    // Escape double quotes
-    size_t pos = 0;
-    while ((pos = html_string.find("\"", pos)) != std::string::npos) {
-        html_string.replace(pos, 1, "\\\"");
-        pos += 2;
+    while (file.available()) {
+        html_string += (char)file.read();
     }
-
-    return html_string;
+    file.close();
+    return String(html_string.c_str());
 }
